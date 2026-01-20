@@ -302,7 +302,7 @@ const MarketplaceSection = () => {
     // Mock Data ที่ดูสมจริงขึ้น
     const items = [
       
-        { id: 4, name: "Trust Badge Legacy", price: "0.003", likes: 342, img: "https://onenarai.com/data/files/admin_pro/goods_25/1765764022.jpg" },
+        { id: 4, name: "Apple Cider Vinegra plus", price: "0.003", likes: 342, img: "https://onenarai.com/data/files/admin_pro/goods_25/1765764022.jpg" },
         
     ];
 
