@@ -23,7 +23,7 @@ import {
 
 const config = getDefaultConfig({
   appName: 'TrustDEX Pro',
-  projectId: 'YOUR_PROJECT_ID', 
+  projectId: '4276f1754fa1cba468df7b87adb48b35', 
   // 2. เพิ่ม sepolia เข้าไปในรายการ chains (เอาไว้หน้าสุดเพื่อให้เป็น default)
   chains: [sepolia, mainnet, polygon, optimism, arbitrum, base],
   ssr: true,
