@@ -8,7 +8,8 @@ import { parseEther, formatEther } from 'viem';
 import { 
   ChevronDown, Activity, ShieldCheck, 
   Globe, Lock, Server, ArrowRightLeft, X, Loader2, Wallet ,
-  Heart, Search, Filter, Zap, LayoutGrid ,Menu
+  Heart, Search, Filter, Zap, LayoutGrid ,Menu,
+  Droplets, TrendingUp, Plus
 } from 'lucide-react';
 
 
@@ -433,8 +434,176 @@ const MarketplaceSection = () => {
     );
 };
 
-const PoolsSection = () => (<div className="text-center py-20 text-slate-400">Pools Content</div>);
+ 
+// --- 4. ส่วนหน้า Liquidity Pools (ใหม่!) ---
+const PoolsSection = () => {
+    const { isConnected } = useAccount();
+    const [expandedId, setExpandedId] = useState<number | null>(null);
+    const [amountA, setAmountA] = useState('');
+    const [amountB, setAmountB] = useState('');
 
+    // Mock Data สำหรับ Pools
+    const pools = [
+        { id: 1, pair: "ETH - TRUST", tokenA: "ETH", tokenB: "TRUST", apr: "125.4%", tvl: "2.4M", multiplier: "40x", color: "from-blue-500 to-indigo-600" },
+        { id: 2, pair: "USDT - TRUST", tokenA: "USDT", tokenB: "TRUST", apr: "85.2%", tvl: "5.1M", multiplier: "25x", color: "from-green-500 to-emerald-600" },
+        { id: 3, pair: "ETH - USDT", tokenA: "ETH", tokenB: "USDT", apr: "15.8%", tvl: "120M", multiplier: "5x", color: "from-slate-500 to-slate-700" },
+    ];
+
+    // จำลองการคำนวณ Price Impact / Ratio
+    const handleAmountChange = (val: string, type: 'A' | 'B') => {
+        if (type === 'A') {
+            setAmountA(val);
+            // สมมติ ratio 1:1000
+            setAmountB(val ? (parseFloat(val) * 1000).toString() : '');
+        } else {
+            setAmountB(val);
+            setAmountA(val ? (parseFloat(val) / 1000).toString() : '');
+        }
+    };
+
+    const { writeContract, isPending } = useWriteContract();
+
+    const handleAddLiquidity = () => {
+        if (!isConnected) return;
+        // ตรงนี้ต้องใส่ ABI ของ Router Contract (เช่น Uniswap Router)
+        // function addLiquidityETH(...)
+        alert(`Adding Liquidity: ${amountA} ${pools.find(p => p.id === expandedId)?.tokenA} + ${amountB} ${pools.find(p => p.id === expandedId)?.tokenB}`);
+    };
+
+    return (
+        <div className="max-w-5xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+            {/* Header Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+                <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] rounded-2xl p-6 text-white shadow-xl">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-blue-500/20 rounded-lg"><Droplets size={20} className="text-blue-400" /></div>
+                        <span className="text-slate-400 text-sm font-medium">Total Value Locked</span>
+                    </div>
+                    <div className="text-3xl font-bold">$124,500,230</div>
+                </div>
+                <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
+                    <div className="flex items-center gap-3 mb-2">
+                        <div className="p-2 bg-green-500/10 rounded-lg"><TrendingUp size={20} className="text-green-600" /></div>
+                        <span className="text-slate-500 text-sm font-medium">24h Volume</span>
+                    </div>
+                    <div className="text-3xl font-bold text-[#0f172a]">$4,200,500</div>
+                </div>
+                <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm flex flex-col justify-center items-center text-center">
+                    <div className="text-sm text-slate-500 mb-1">Your Active Liquidity</div>
+                    <div className="text-2xl font-bold text-indigo-600">$0.00</div>
+                    <div className="text-xs text-slate-400">No active positions</div>
+                </div>
+            </div>
+
+            <h2 className="text-2xl font-bold text-[#0f172a] mb-6 flex items-center gap-2">
+                Top Liquidity Pools <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-1 rounded-full">Earn Fees</span>
+            </h2>
+
+            {/* Pools List */}
+            <div className="space-y-4">
+                {pools.map((pool) => (
+                    <div key={pool.id} className={`bg-white rounded-2xl border transition-all duration-300 overflow-hidden ${expandedId === pool.id ? 'border-blue-500 shadow-lg ring-1 ring-blue-200' : 'border-slate-200 hover:border-blue-300'}`}>
+                        {/* Pool Header Row */}
+                        <div 
+                            className="p-6 cursor-pointer flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
+                            onClick={() => setExpandedId(expandedId === pool.id ? null : pool.id)}
+                        >
+                            <div className="flex items-center gap-4">
+                                <div className="flex -space-x-2">
+                                    <div className={`w-10 h-10 rounded-full bg-gradient-to-br ${pool.color} border-2 border-white flex items-center justify-center text-white text-xs font-bold`}>{pool.tokenA[0]}</div>
+                                    <div className={`w-10 h-10 rounded-full bg-slate-800 border-2 border-white flex items-center justify-center text-white text-xs font-bold`}>{pool.tokenB[0]}</div>
+                                </div>
+                                <div>
+                                    <h3 className="font-bold text-lg text-[#0f172a]">{pool.pair}</h3>
+                                    <div className="text-xs text-slate-500 bg-slate-100 px-2 py-0.5 rounded inline-block">Fee 0.3%</div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-8 w-full md:w-auto justify-between md:justify-end">
+                                <div className="text-left md:text-right">
+                                    <div className="text-xs text-slate-400">APR</div>
+                                    <div className="font-bold text-green-600 flex items-center gap-1">
+                                        <Zap size={12} fill="currentColor" /> {pool.apr}
+                                    </div>
+                                </div>
+                                <div className="text-left md:text-right">
+                                    <div className="text-xs text-slate-400">TVL</div>
+                                    <div className="font-bold text-[#0f172a]">${pool.tvl}</div>
+                                </div>
+                                <div className={`transition-transform duration-300 ${expandedId === pool.id ? 'rotate-180' : ''}`}>
+                                    <ChevronDown size={20} className="text-slate-400" />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Expandable Section (Add Liquidity) */}
+                        <div className={`bg-slate-50 border-t border-slate-100 transition-all duration-500 ease-in-out ${expandedId === pool.id ? 'max-h-[500px] opacity-100 p-6' : 'max-h-0 opacity-0 p-0 overflow-hidden'}`}>
+                            <div className="flex flex-col md:flex-row gap-6 items-start">
+                                <div className="flex-1 w-full space-y-4">
+                                    <div className="flex justify-between text-sm font-bold text-[#0f172a]">
+                                        <span>Add Liquidity</span>
+                                        <span className="text-slate-400 font-normal">Balance: 0.00</span>
+                                    </div>
+                                    
+                                    {/* Input Token A */}
+                                    <div className="bg-white border border-slate-200 p-3 rounded-xl flex items-center justify-between">
+                                        <input 
+                                            type="number" 
+                                            placeholder="0.0" 
+                                            value={amountA}
+                                            onChange={(e) => handleAmountChange(e.target.value, 'A')}
+                                            className="w-full bg-transparent font-bold text-xl outline-none text-[#0f172a]" 
+                                        />
+                                        <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-sm font-bold ml-2">{pool.tokenA}</span>
+                                    </div>
+
+                                    <div className="flex justify-center text-slate-400"><Plus size={16} /></div>
+
+                                    {/* Input Token B */}
+                                    <div className="bg-white border border-slate-200 p-3 rounded-xl flex items-center justify-between">
+                                        <input 
+                                            type="number" 
+                                            placeholder="0.0" 
+                                            value={amountB}
+                                            onChange={(e) => handleAmountChange(e.target.value, 'B')}
+                                            className="w-full bg-transparent font-bold text-xl outline-none text-[#0f172a]" 
+                                        />
+                                        <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded text-sm font-bold ml-2">{pool.tokenB}</span>
+                                    </div>
+
+                                    {!isConnected ? (
+                                        <button className="w-full bg-slate-200 text-slate-500 font-bold py-3 rounded-xl cursor-not-allowed">Connect Wallet First</button>
+                                    ) : (
+                                        <button 
+                                            onClick={handleAddLiquidity}
+                                            disabled={!amountA || !amountB}
+                                            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-xl shadow-lg shadow-blue-500/20 active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
+                                        >
+                                            {isPending ? 'Processing...' : 'Add Liquidity'}
+                                        </button>
+                                    )}
+                                </div>
+
+                                {/* Info / Rewards Box */}
+                                <div className="w-full md:w-64 bg-indigo-50 border border-indigo-100 p-4 rounded-xl">
+                                    <h4 className="font-bold text-indigo-900 mb-2 text-sm">Position Summary</h4>
+                                    <ul className="space-y-2 text-sm text-indigo-800/80">
+                                        <li className="flex justify-between"><span>Share of Pool:</span> <span className="font-bold">{'< 0.01%'}</span></li>
+                                        <li className="flex justify-between"><span>Est. APR:</span> <span className="font-bold text-green-600">{pool.apr}</span></li>
+                                        <li className="flex justify-between"><span>Multiplier:</span> <span className="font-bold text-orange-500">{pool.multiplier}</span></li>
+                                    </ul>
+                                    <div className="mt-4 pt-3 border-t border-indigo-200 text-xs text-indigo-600">
+                                        💡 By adding liquidity, you'll earn 0.25% of all trades on this pair proportional to your share.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
 export default function CryptoExchange() {
   const [activeMenu, setActiveMenu] = useState('Swap');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -457,10 +626,8 @@ export default function CryptoExchange() {
           
           {/* Logo */}
           <div className="flex items-center gap-3 cursor-pointer" onClick={()=>setActiveMenu('Swap')}>
-            <div className="w-8 h-8 bg-blue-600 rounded flex items-center justify-center shadow-lg shadow-blue-500/30">
-                <Activity className="text-white" size={20} />
-            </div>
-            <span className="text-xl font-bold tracking-tight">TrustDEX <span className="text-[10px] font-normal text-blue-300 bg-blue-900/50 px-1.5 py-0.5 rounded border border-blue-800 ml-1">PRO</span></span>
+            <img src="img/logo200.png" alt="Logo" className="w-10 h-10 object-contain" />
+            <span className="text-xl font-bold tracking-tight">Onenarai Exchange <span className="text-[10px] font-normal text-blue-300 bg-blue-900/50 px-1.5 py-0.5 rounded border border-blue-800 ml-1">PRO</span></span>
           </div>
 
           {/* Desktop Menu (ซ่อนในมือถือ) */}
