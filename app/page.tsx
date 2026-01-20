@@ -623,7 +623,7 @@ export default function CryptoExchange() {
           
           {/* Logo */}
           <div className="flex items-center gap-3 cursor-pointer" onClick={()=>setActiveMenu('Swap')}>
-            <img src="img" alt="Logo" className="w-10 h-10 object-contain" />
+            <img src="img/logo200.png" alt="Logo" className="w-10 h-10 object-contain" />
             <span className="text-xl font-bold tracking-tight">Onenarai Exchange <span className="text-[10px] font-normal text-blue-300 bg-blue-900/50 px-1.5 py-0.5 rounded border border-blue-800 ml-1">PRO</span></span>
           </div>
 
