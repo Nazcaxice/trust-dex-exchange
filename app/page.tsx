@@ -301,12 +301,9 @@ const MarketplaceSection = () => {
 
     // Mock Data ที่ดูสมจริงขึ้น
     const items = [
-        { id: 2, name: "Cyber Punk #001", price: "0.001", likes: 120, img: "https://test.onenarai.com/data/files/admin_pro/goods_4/1759585968.jpg" },
-        { id: 3, name: "Golden Ape #02", price: "0.005", likes: 85, img: "https://test.onenarai.com/data/files/admin_pro/goods_1/1759582463.jpg" },
-        { id: 4, name: "Trust Badge Legacy", price: "0.01", likes: 342, img: "https://onenarai.com/data/files/admin_pro/goods_25/1765764022.jpg" },
-        { id: 5, name: "Neon Walker", price: "0.008", likes: 45, img: "https://robohash.org/trust4?set=set4&bgset=bg2" },
-        { id: 6, name: "Blue Soul", price: "0.015", likes: 210, img: "https://robohash.org/trust5?set=set4&bgset=bg2" },
-        { id: 7, name: "Crypto Samurai", price: "0.02", likes: 99, img: "https://robohash.org/trust6?set=set4&bgset=bg2" },
+      
+        { id: 4, name: "Trust Badge Legacy", price: "0.003", likes: 342, img: "https://onenarai.com/data/files/admin_pro/goods_25/1765764022.jpg" },
+        
     ];
 
     const handleBuy = (tokenId: number, price: string) => {
@@ -626,7 +623,7 @@ export default function CryptoExchange() {
           
           {/* Logo */}
           <div className="flex items-center gap-3 cursor-pointer" onClick={()=>setActiveMenu('Swap')}>
-            <img src="img/logo200.png" alt="Logo" className="w-10 h-10 object-contain" />
+            <img src="img" alt="Logo" className="w-10 h-10 object-contain" />
             <span className="text-xl font-bold tracking-tight">Onenarai Exchange <span className="text-[10px] font-normal text-blue-300 bg-blue-900/50 px-1.5 py-0.5 rounded border border-blue-800 ml-1">PRO</span></span>
           </div>
 
