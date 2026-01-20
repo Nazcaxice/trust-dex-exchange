@@ -387,18 +387,7 @@ const MarketplaceSection = () => {
                             </button>
                             
                             {/* Buy Button Overlay (Show on Hover) */}
-                            <div className="absolute inset-x-4 bottom-4 translate-y-20 group-hover:translate-y-0 transition-transform duration-300">
-                                <button 
-                                    onClick={(e) => {
-                                        e.stopPropagation(); // กันไม่ให้กดโดนการ์ด
-                                        handleBuy(item.id, item.price);
-                                    }}
-                                    disabled={isPending || isConfirming}
-                                    className="w-full bg-white/90 backdrop-blur text-[#0f172a] font-bold py-3 rounded-xl shadow-lg hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-2"
-                                >
-                                    <Zap size={18} fill="currentColor" /> {isPending ? 'Processing...' : 'Buy Now'}
-                                </button>
-                            </div>
+                             
                         </div>
 
                         {/* Content */}
@@ -425,6 +414,18 @@ const MarketplaceSection = () => {
                                 </div>
                             </div>
                         </div>
+                        <div className="px-2 pb-2">
+                             <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation(); // กันไม่ให้กดโดนการ์ด
+                                        handleBuy(item.id, item.price);
+                                    }}
+                                    disabled={isPending || isConfirming}
+                                    className="w-full bg-white/90 backdrop-blur text-[#0f172a] font-bold py-3 rounded-xl shadow-lg hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center gap-2"
+                                >
+                                    <Zap size={18} fill="currentColor" /> {isPending ? 'Processing...' : 'Buy Now'}
+                                </button>
+                        </div>   
                     </div>
                 ))}
             </div>
