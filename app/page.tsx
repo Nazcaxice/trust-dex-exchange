@@ -20,14 +20,22 @@ import {
 
 // --- 2. ส่วนหน้า Staking (อัปเกรดใหม่!) ---
  // 1. เพิ่ม Address ของเหรียญ TrustCoin ที่เพิ่ง Deploy
-const TOKEN_ADDRESS = (process.env.NEXT_PUBLIC_TOKEN_ADDRESS || "") as `0x${string}`; // <--- ใส่ Address เหรียญ TrustCoin (Addr_A)
-// 2. แก้ Address นี้เป็นของ StakingV2 (Addr_B)
-const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_STAKING_ADDRESS || "") as `0x${string}`;
+//const TOKEN_ADDRESS = (process.env.NEXT_PUBLIC_TOKEN_ADDRESS || "") as `0x${string}`; // <--- ใส่ Address เหรียญ TrustCoin (Addr_A)
+//const CONTRACT_ADDRESS = (process.env.NEXT_PUBLIC_STAKING_ADDRESS || "") as `0x${string}`;
+//const DEX_ADDRESS = (process.env.NEXT_PUBLIC_DEX_ADDRESS || "") as `0x${string}`; // <--- ใส่ Address ของ DEX (0xCCC...)
+//const NFT_ADDRESS = (process.env.NEXT_PUBLIC_NFT_ADDRESS || "") as `0x${string}`; // <--- ใส่ NFT_ADDR
+//const MARKET_ADDRESS = (process.env.NEXT_PUBLIC_MARKET_ADDRESS || "") as `0x${string}`;// <--- ใส่ MARKET_ADDR
 
-const DEX_ADDRESS = (process.env.NEXT_PUBLIC_DEX_ADDRESS || "") as `0x${string}`; // <--- ใส่ Address ของ DEX (0xCCC...)
 
-const NFT_ADDRESS = (process.env.NEXT_PUBLIC_NFT_ADDRESS || "") as `0x${string}`; // <--- ใส่ NFT_ADDR
-const MARKET_ADDRESS = (process.env.NEXT_PUBLIC_MARKET_ADDRESS || "") as `0x${string}`;// <--- ใส่ MARKET_ADDR
+
+
+const TOKEN_ADDRESS = "0x914A685eC50496e41f6a508F9E481aacCEE4cC7a"; // <--- ใส่ Address เหรียญ TrustCoin (Addr_A)
+const CONTRACT_ADDRESS = "0x63F816Ab75938a05c01fCeAf3483F3928A85ea49"; 
+const DEX_ADDRESS = "0xd0766B51267368be357909604F490a46808509A2"; // <--- ใส่ Address ของ DEX (0xCCC...)
+const NFT_ADDRESS = "0x68A8a19bfe99D97aCF87f0180D6805a732dAaE0C";   // <--- ใส่ NFT_ADDR
+const MARKET_ADDRESS = "0xceA35d9a35dF99c55A8375AC92B279F70A1A49D5"; // <--- ใส่ MARKET_ADDR
+
+
 // ABI สำหรับอ่านยอดเหรียญ ERC20
 const TOKEN_ABI = [
   { "inputs": [{ "internalType": "address", "name": "account", "type": "address" }], "name": "balanceOf", "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }], "stateMutability": "view", "type": "function" }
