@@ -252,6 +252,7 @@ const MarketplaceSection = () => {
 
     // --- ฟังก์ชันหลัก: Mint & List (Step 1-4) ---
     const handleMintAndList = async () => {
+        if (!publicClient) return;
         if (!isConnected || !itemName || !sellPrice || !itemImageFile) { 
             alert("Please connect wallet, upload an image, and fill details."); return; 
         }
@@ -326,6 +327,7 @@ const MarketplaceSection = () => {
     
     // ✅ ฟังก์ชันอ่านข้อมูลสินค้าและ Metadata (รูปภาพ)
     const fetchListings = async () => {
+        if (!publicClient) return;
         try {
             const countResult = await publicClient.readContract({
                 address: NFT_MARKET_ADDRESS as `0x${string}`,
@@ -403,6 +405,7 @@ const MarketplaceSection = () => {
 
    // 5. ฟังก์ชันซื้อ (Buy) - ฉบับแก้ไข Approve
     const handleBuy = async (item: any) => {
+        if (!publicClient) return;
         if (!isConnected) { alert("Please connect wallet first!"); return; }
         
         try {
