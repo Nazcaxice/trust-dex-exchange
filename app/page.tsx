@@ -307,7 +307,7 @@ const MarketplaceSection = () => {
                     { "inputs": [{ "internalType": "address", "name": "_nftContract", "type": "address" }, { "internalType": "uint256", "name": "_tokenId", "type": "uint256" }, { "internalType": "address", "name": "_paymentToken", "type": "address" }, { "internalType": "uint256", "name": "_price", "type": "uint256" }], "name": "listNFT", "outputs": [], "stateMutability": "nonpayable", "type": "function" }
                 ],
                 functionName: 'listNFT',
-                args: [MINTABLE_NFT_ADDRESS as `0x${string}`, BigInt(newTokenId), paymentTokenAddr, priceWei]
+                args: [MINTABLE_NFT_ADDRESS as `0x${string}`, BigInt(newTokenId), paymentTokenAddr as `0x${string}`, priceWei]
             });
 
             alert(`✅ Successfully Created & Listed "${itemName}"!`);
