@@ -691,8 +691,9 @@ const TokenOptionCard = ({ tokenKey, isSelected, onClick, userAddress, STAKING_A
     };
 
     const dynamicAPR = calculateDynamicAPR();
-    const hasReward = pendingReward && (pendingReward as bigint) > 0n;
-
+    // ใช้ Ternary Operator เพื่อบังคับให้ผลลัพธ์เป็น boolean (true/false) เท่านั้น
+    const hasReward = pendingReward ? (pendingReward as bigint) > BigInt(0) : false;
+    
     return (
         <div 
             onClick={() => onClick(tokenKey)} 
