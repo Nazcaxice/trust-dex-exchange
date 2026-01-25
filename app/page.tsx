@@ -275,7 +275,7 @@ const MarketplaceSection = () => {
                 address: MINTABLE_NFT_ADDRESS as `0x${string}`,
                 abi: parseAbi(MINTABLE_NFT_ABI),
                 functionName: 'mintItem',
-                args: [address, tokenURI]
+                args: [address as `0x${string}`, tokenURI]
             });
             
             setStatus("Waiting for Mint confirmation...");
@@ -291,7 +291,7 @@ const MarketplaceSection = () => {
                 address: MINTABLE_NFT_ADDRESS as `0x${string}`,
                 abi: parseAbi(MINTABLE_NFT_ABI),
                 functionName: 'approve',
-                args: [NFT_MARKET_ADDRESS, BigInt(newTokenId)]
+                args: [NFT_MARKET_ADDRESS as `0x${string}`, BigInt(newTokenId)]
             });
             setStatus("Waiting for Approval confirmation...");
             await publicClient.waitForTransactionReceipt({ hash: approveTxHash });
@@ -307,7 +307,7 @@ const MarketplaceSection = () => {
                     { "inputs": [{ "internalType": "address", "name": "_nftContract", "type": "address" }, { "internalType": "uint256", "name": "_tokenId", "type": "uint256" }, { "internalType": "address", "name": "_paymentToken", "type": "address" }, { "internalType": "uint256", "name": "_price", "type": "uint256" }], "name": "listNFT", "outputs": [], "stateMutability": "nonpayable", "type": "function" }
                 ],
                 functionName: 'listNFT',
-                args: [MINTABLE_NFT_ADDRESS, BigInt(newTokenId), paymentTokenAddr, priceWei]
+                args: [MINTABLE_NFT_ADDRESS as `0x${string}`, BigInt(newTokenId), paymentTokenAddr, priceWei]
             });
 
             alert(`✅ Successfully Created & Listed "${itemName}"!`);
@@ -445,7 +445,7 @@ const MarketplaceSection = () => {
                     address: tokenConfig.address as `0x${string}`,
                     abi: ERC20_ABI, 
                     functionName: 'approve',
-                    args: [NFT_MARKET_ADDRESS, BigInt(item.rawPrice)]
+                    args: [NFT_MARKET_ADDRESS as `0x${string}`, BigInt(item.rawPrice)]
                 });
 
                 alert("Waiting for Approval confirmation... (Please wait)");
@@ -644,7 +644,7 @@ const TokenOptionCard = ({ tokenKey, isSelected, onClick, userAddress, STAKING_A
         address: STAKING_ADDRESS,
         abi: STAKING_READ_ABI,
         functionName: 'pools',
-        args: [token.address],
+        args: [token.address as `0x${string}`],
         query: { refetchInterval: 5000 }
     });
     const totalStaked = poolInfo ? (poolInfo as any)[3] : 0n;
@@ -654,7 +654,7 @@ const TokenOptionCard = ({ tokenKey, isSelected, onClick, userAddress, STAKING_A
         address: STAKING_ADDRESS,
         abi: STAKING_READ_ABI,
         functionName: 'userInfo',
-        args: [token.address, userAddress],
+        args: [token.address as `0x${string}`, userAddress],
         query: { refetchInterval: 5000 }
     });
     const userStaked = userInfo ? (userInfo as any)[0] : 0n;
@@ -663,7 +663,7 @@ const TokenOptionCard = ({ tokenKey, isSelected, onClick, userAddress, STAKING_A
         address: STAKING_ADDRESS,
         abi: STAKING_READ_ABI,
         functionName: 'calculatePendingReward',
-        args: [token.address, userAddress],
+        args: [token.address as `0x${string}`, userAddress],
         query: { refetchInterval: 5000 }
     });
 
@@ -676,7 +676,7 @@ const TokenOptionCard = ({ tokenKey, isSelected, onClick, userAddress, STAKING_A
                 address: STAKING_ADDRESS, 
                 abi: [{ "inputs": [{ "internalType": "address", "name": "token", "type": "address" }], "name": "claimReward", "outputs": [], "stateMutability": "nonpayable", "type": "function" }], 
                 functionName: 'claimReward', 
-                args: [token.address] 
+                args: [token.address as `0x${string}`] 
             });
             alert(`✅ Claimed ${tokenKey} Rewards!`);
             refetchReward();
@@ -765,7 +765,7 @@ const StakingSection = () => {
         address: TOKENS["ABronze"].address as `0x${string}`,
         abi: ERC20_ABI,
         functionName: 'balanceOf',
-        args: [address],
+        args: [address as `0x${string}`],
     });
 
     const handleAction = async () => {
@@ -777,11 +777,11 @@ const StakingSection = () => {
 
             if (mode === 'STAKE') {
                 if (tokenConfig.address === "NATIVE") { alert("Native ETH not supported."); setIsProcessing(false); return; }
-                await writeContractAsync({ address: tokenConfig.address as `0x${string}`, abi: ERC20_ABI, functionName: 'approve', args: [STAKING_ADDRESS, amountWei] });
-                await writeContractAsync({ address: STAKING_ADDRESS as `0x${string}`, abi: [{ "inputs": [{ "internalType": "address", "name": "token", "type": "address" }, { "internalType": "uint256", "name": "amount", "type": "uint256" }], "name": "stake", "outputs": [], "stateMutability": "nonpayable", "type": "function" }], functionName: 'stake', args: [tokenConfig.address, amountWei] });
+                await writeContractAsync({ address: tokenConfig.address as `0x${string}`, abi: ERC20_ABI, functionName: 'approve', args: [STAKING_ADDRESS as `0x${string}`, amountWei] });
+                await writeContractAsync({ address: STAKING_ADDRESS as `0x${string}`, abi: [{ "inputs": [{ "internalType": "address", "name": "token", "type": "address" }, { "internalType": "uint256", "name": "amount", "type": "uint256" }], "name": "stake", "outputs": [], "stateMutability": "nonpayable", "type": "function" }], functionName: 'stake', args: [tokenConfig.address as `0x${string}`, amountWei] });
                 alert("✅ Stake Success!");
             } else {
-                await writeContractAsync({ address: STAKING_ADDRESS as `0x${string}`, abi: [{ "inputs": [{ "internalType": "address", "name": "token", "type": "address" }, { "internalType": "uint256", "name": "amount", "type": "uint256" }], "name": "withdraw", "outputs": [], "stateMutability": "nonpayable", "type": "function" }], functionName: 'withdraw', args: [tokenConfig.address, amountWei] });
+                await writeContractAsync({ address: STAKING_ADDRESS as `0x${string}`, abi: [{ "inputs": [{ "internalType": "address", "name": "token", "type": "address" }, { "internalType": "uint256", "name": "amount", "type": "uint256" }], "name": "withdraw", "outputs": [], "stateMutability": "nonpayable", "type": "function" }], functionName: 'withdraw', args: [tokenConfig.address as `0x${string}`, amountWei] });
                 alert("✅ Withdraw Success!");
             }
             setAmount("");
