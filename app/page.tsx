@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt, usePublicClient } from 'wagmi';
 import { parseEther, formatEther, parseUnits, formatUnits, parseAbi } from 'viem';
@@ -905,6 +906,9 @@ export default function CryptoExchange() {
             <span className="text-xl font-bold tracking-tight">Onenarai <span className="text-blue-400">DEX</span></span>
           </div>
           <nav className="hidden md:flex gap-1 text-sm font-medium text-slate-400">
+            <Link href="/mall" className="px-4 py-2 rounded-lg hover:text-white transition-all">
+                Shopping Mall
+            </Link>
             {['Swap', 'Marketplace', 'Staking', 'Pools Liquidity'].map((item) => (
               <button key={item} onClick={() => setActiveMenu(item)} className={`px-4 py-2 rounded-lg transition-all ${activeMenu === item ? 'bg-slate-800 text-white' : 'hover:text-white'}`}>{item}</button>
             ))}
