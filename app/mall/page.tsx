@@ -10,14 +10,14 @@ import {
     ShoppingBag, Plus, CreditCard, X, CheckCircle, 
     Loader2, Crown, Settings, MapPin, Minus, Trash2,
     FileText, Clock, ExternalLink, Eye, User, List, ArrowRight, Copy, ArrowLeft, Printer,
-    Wallet, RefreshCw
+    Wallet, RefreshCw, AlertTriangle
 } from 'lucide-react';
 
 // ==========================================
 // CONFIGURATION
 // ==========================================
 const MERCHANT_WALLET = "0xA9b549c00E441A8043eDc267245ADF12533611b4";
-const BLOCK_EXPLORER = "https://sepolia.etherscan.io/tx/"; 
+const BLOCK_EXPLORER = "https://testnet.bscscan.com/tx/"; 
 const EXCHANGE_RATES: Record<string, number> = { "THB": 1, "USDT": 34.5, "ADS": 10.0, "ETH": 85000 };
 const TOKENS: Record<string, { address: string; decimals: number }> = {
     "USDT": { address: "0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0", decimals: 6 },
@@ -72,8 +72,8 @@ export default function MallPage() {
             setCart(JSON.parse(pendingCart));
             setIsCheckoutOpen(true);
             setCheckoutStep(2);
-            setStatusMessage("Found pending transaction from mobile app. Please check status.");
-            setIsProcessing(true); // เปิดปุ่มให้กด Check ได้เลย
+            setStatusMessage("Found pending transaction. Please check status.");
+            setIsProcessing(true); 
         }
     }, []);
 
@@ -175,42 +175,60 @@ export default function MallPage() {
         }
     };
 
-    // ✅ Manual Check (Updated)
+    // ✅ Manual Check (Updated: More Robust)
     const handleManualCheck = async () => {
-        // ดึงจาก State หรือ LocalStorage
         const hashToCheck = currentTxHash || localStorage.getItem('pendingTxHash');
 
         if (!hashToCheck) { 
-            alert("ไม่พบข้อมูล Transaction Hash กรุณาทำรายการใหม่"); 
+            alert("No pending transaction found."); 
             setIsProcessing(false);
             return; 
         }
         
-        // อัปเดต state ให้เห็นใน input ด้วย
-        setCurrentTxHash(hashToCheck);
-
+        setCurrentTxHash(hashToCheck); // Update UI
         if (!publicClient) return;
         
-        setStatusMessage("Checking transaction status on blockchain... ⏳");
+        setStatusMessage("Searching for transaction on network... ⏳");
         
         try {
+            // 1. เช็คก่อนว่ามี Transaction นี้ในระบบหรือยัง (Mempool check)
+            try {
+                const tx = await publicClient.getTransaction({ hash: hashToCheck as `0x${string}` });
+                if (!tx) {
+                    throw new Error("Transaction not found in mempool yet");
+                }
+                setStatusMessage("Transaction found! Waiting for confirmation... ⏳");
+            } catch (e) {
+                console.log("Transaction not propagated yet...");
+            }
+
+            // 2. รอผลลัพธ์ (เพิ่ม timeout เป็น 60 วินาที)
             const receipt = await publicClient.waitForTransactionReceipt({ 
                 hash: hashToCheck as `0x${string}`, 
-                timeout: 15_000 
+                timeout: 60_000, // รอ 60 วินาที
+                pollingInterval: 3_000 // เช็คทุก 3 วินาที
             });
 
             if (receipt.status === 'success') {
                 await saveOrderToDb(hashToCheck);
             } else {
-                alert("Transaction Failed/Reverted on Blockchain."); 
+                alert("Transaction Failed/Reverted."); 
                 setStatusMessage("Transaction failed."); 
                 setIsProcessing(false);
                 localStorage.removeItem('pendingTxHash'); 
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            alert("Transaction not found YET or Network is slow.\nPlease wait ~10 seconds and click 'Check Status' again.");
-            setStatusMessage("Network slow. Please click 'Check Status' again.");
+            // ถ้า Error เพราะ Timeout หรือหาไม่เจอ
+            const isTimeout = error.name === 'TimeoutError' || error.message.includes('timed out');
+            
+            if (isTimeout) {
+                alert("⏳ Network is slow or Transaction is still pending.\n\nPlease wait 30 seconds and click 'Check Status' again.");
+                setStatusMessage("Pending... Please wait and check again.");
+            } else {
+                alert("Error checking transaction: " + (error.message || "Unknown error"));
+                setStatusMessage("Check failed. Please try again.");
+            }
         }
     };
 
@@ -236,7 +254,7 @@ export default function MallPage() {
             }
 
             if (txHash) {
-                // บันทึก Hash ทันที
+                // บันทึกทันที
                 localStorage.setItem('pendingTxHash', txHash);
                 localStorage.setItem('pendingCart', JSON.stringify(cart));
                 setCurrentTxHash(txHash);
@@ -248,7 +266,7 @@ export default function MallPage() {
                         await publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
                         await saveOrderToDb(txHash);
                     } catch (e) {
-                        console.log("Auto wait failed, user must click manual check");
+                        console.log("Auto wait failed, fallback to manual check");
                     }
                 }
             }
@@ -384,21 +402,16 @@ export default function MallPage() {
                                     {currentTxHash && (
                                         <div className="mt-3">
                                             <label className="text-xs text-slate-400 block text-left mb-1">Transaction Hash (Debug):</label>
-                                            <input 
-                                                type="text" 
-                                                value={currentTxHash} 
-                                                readOnly 
-                                                className="w-full p-2 text-xs border rounded-lg bg-slate-100 text-slate-600 font-mono focus:outline-none"
-                                            />
+                                            <input type="text" value={currentTxHash} readOnly className="w-full p-2 text-xs border rounded-lg bg-slate-100 text-slate-600 font-mono focus:outline-none"/>
                                         </div>
                                     )}
 
                                     {/* Manual Check Button */}
                                     {currentTxHash && isProcessing && (
                                         <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-center">
-                                            <p className="text-xs text-blue-600 mb-2">If you have paid but the screen is stuck:</p>
+                                            <p className="text-xs text-blue-600 mb-2 flex items-center justify-center gap-1"><AlertTriangle size={12}/> If paid but stuck, click below:</p>
                                             <div className="flex flex-col gap-2">
-                                                <button onClick={handleManualCheck} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 w-full flex items-center justify-center gap-2"><RefreshCw size={16}/> I have paid (Check Status)</button>
+                                                <button onClick={handleManualCheck} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 w-full flex items-center justify-center gap-2"><RefreshCw size={16}/> Check Status (Force)</button>
                                                 <button onClick={handleClearPending} className="text-red-400 text-xs hover:text-red-600 underline">Cancel / Reset</button>
                                             </div>
                                         </div>
