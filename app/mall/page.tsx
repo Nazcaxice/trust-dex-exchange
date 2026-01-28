@@ -10,7 +10,7 @@ import {
     ShoppingBag, Plus, CreditCard, X, CheckCircle, 
     Loader2, Crown, Settings, MapPin, Minus, Trash2,
     FileText, Clock, ExternalLink, Eye, User, List, ArrowRight, Copy, ArrowLeft, Printer,
-    Wallet, RefreshCw, AlertTriangle, XCircle // ✅ เพิ่มไอคอน XCircle
+    Wallet, RefreshCw, AlertTriangle, XCircle
 } from 'lucide-react';
 
 // ==========================================
@@ -19,7 +19,6 @@ import {
 const MERCHANT_WALLET = "0xA9b549c00E441A8043eDc267245ADF12533611b4";
 const BLOCK_EXPLORER = "https://sepolia.etherscan.io/tx/"; 
 const EXCHANGE_RATES: Record<string, number> = { "THB": 1, "USDT": 34.5, "ADS": 10.0, "ETH": 85000 };
-// ✅ กำหนด Chain ID ที่ถูกต้อง (Sepolia = 11155111)
 const TARGET_CHAIN_ID = 11155111; 
 
 const TOKENS: Record<string, { address: string; decimals: number }> = {
@@ -74,7 +73,6 @@ export default function MallPage() {
         }
     }, []);
 
-    // Fetch Data Functions ... (คงเดิม)
     const fetchProducts = async () => {
         setIsLoadingData(true);
         const { data, error } = await supabase.from('products').select('*').order('id', { ascending: false });
@@ -109,7 +107,6 @@ export default function MallPage() {
     useEffect(() => { fetchProducts(); }, []);
     useEffect(() => { if (isConnected && address) fetchUser(); else setCurrentUser(null); }, [isConnected, address]);
 
-    // Helper Functions ... (คงเดิม)
     const addToCart = (product: Product) => {
         setCart(prev => {
             const exist = prev.find(p => p.id === product.id);
@@ -134,9 +131,31 @@ export default function MallPage() {
     const finalPriceTHB = cartTotalTHB - discountTHB;
     const cryptoPrice = (finalPriceTHB / EXCHANGE_RATES[selectedToken]).toFixed(6);
 
-    // Save Order
+    // ✅ SAVE ORDER (Updated with Duplicate Check)
     const saveOrderToDb = async (txHash: string) => {
         try {
+            setStatusMessage("Checking for duplicates...");
+
+            // 1. เช็คก่อนว่ามี Order นี้อยู่แล้วหรือไม่ (ป้องกันการบันทึกซ้ำ)
+            const { data: existingOrders } = await supabase
+                .from('orders')
+                .select('id')
+                .eq('tx_hash', txHash); // ใช้ .select() ธรรมดาแล้วเช็ค length จะชัวร์กว่า .single() ในบางกรณี
+
+            if (existingOrders && existingOrders.length > 0) {
+                console.log("Order already exists, skipping save.");
+                // ถ้ามีแล้ว ให้ข้ามการบันทึก แล้วเคลียร์ State ถือว่าสำเร็จเลย
+                localStorage.removeItem('pendingTxHash');
+                localStorage.removeItem('pendingCart');
+                setCart([]); 
+                setCurrentTxHash(""); 
+                setStatusMessage(""); 
+                setCheckoutStep(3); 
+                setIsProcessing(false);
+                return; // ⛔ จบฟังก์ชันทันที
+            }
+
+            // 2. ถ้ายังไม่มี ให้บันทึกตามปกติ
             setStatusMessage("Payment confirmed! Saving order...");
             const earnedPoints = Math.floor(finalPriceTHB / 100);
             const newPoints = (currentUser?.points || 0) + earnedPoints;
@@ -149,11 +168,20 @@ export default function MallPage() {
             }]);
             
             if (error) throw error;
-            if (address) { await supabase.from('users').update({ points: newPoints, tier: newTier, phone: shippingInfo.phone, shipping_address: shippingInfo.address }).eq('wallet_address', address); fetchUser(); }
+            
+            if (address) { 
+                await supabase.from('users').update({ 
+                    points: newPoints, tier: newTier, phone: shippingInfo.phone, shipping_address: shippingInfo.address 
+                }).eq('wallet_address', address); 
+                fetchUser(); 
+            }
 
+            // Clear Storage
             localStorage.removeItem('pendingTxHash');
             localStorage.removeItem('pendingCart');
+
             setCart([]); setCurrentTxHash(""); setStatusMessage(""); setCheckoutStep(3); setIsProcessing(false);
+
         } catch (error: any) {
             console.error("Save DB Error:", error);
             alert("Payment successful but failed to save order: " + error.message);
@@ -161,7 +189,7 @@ export default function MallPage() {
         }
     };
 
-    // ✅ Manual Check (Updated: Handle Failed Status)
+    // Manual Check
     const handleManualCheck = async () => {
         const hashToCheck = currentTxHash || localStorage.getItem('pendingTxHash');
         if (!hashToCheck) { alert("No pending transaction found."); setIsProcessing(false); return; }
@@ -191,8 +219,7 @@ export default function MallPage() {
             if (receipt.status === 'success') {
                 await saveOrderToDb(hashToCheck);
             } else {
-                // ❌ Transaction Failed
-                alert("❌ Transaction FAILED on Blockchain!\n(Status: Reverted)\n\nPlease try again.");
+                alert("❌ Transaction FAILED (Reverted)!");
                 setStatusMessage("Transaction Failed (Reverted) ❌");
                 setIsProcessing(false);
                 localStorage.removeItem('pendingTxHash'); 
@@ -210,7 +237,6 @@ export default function MallPage() {
         }
     };
 
-    // ✅ Handle Checkout (Updated: Auto check status)
     const handleCheckout = async () => {
         if (!isConnected) { alert("Please Connect Wallet"); return; }
         if (!shippingInfo.name || !shippingInfo.address) { alert("Please fill shipping details"); setCheckoutStep(1); return; }
@@ -232,7 +258,12 @@ export default function MallPage() {
             
             let txHash = "";
             if (selectedToken !== "ETH") {
-                txHash = await writeContractAsync({ address: tokenConfig.address as `0x${string}`, abi: ERC20_ABI, functionName: 'transfer', args: [MERCHANT_WALLET, amountWei] });
+                txHash = await writeContractAsync({ 
+                    address: tokenConfig.address as `0x${string}`, 
+                    abi: ERC20_ABI, 
+                    functionName: 'transfer', 
+                    args: [MERCHANT_WALLET, amountWei] 
+                });
             } else {
                 alert("ETH payment implementation required sendTransaction hook"); setIsProcessing(false); return;
             }
@@ -248,7 +279,6 @@ export default function MallPage() {
                     try {
                         const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
                         
-                        // ✅ เพิ่มการเช็ค Status ตรงนี้ด้วย
                         if (receipt.status === 'success') {
                             await saveOrderToDb(txHash);
                         } else {
@@ -394,7 +424,12 @@ export default function MallPage() {
                                         <div className="mt-3">
                                             <label className="text-xs text-slate-400 block text-left mb-1">Transaction Hash (Debug):</label>
                                             <div className="flex items-center gap-2">
-                                                <input type="text" value={currentTxHash} readOnly className="w-full p-2 text-xs border rounded-lg bg-slate-100 text-slate-600 font-mono focus:outline-none"/>
+                                                <input 
+                                                    type="text" 
+                                                    value={currentTxHash} 
+                                                    readOnly 
+                                                    className="w-full p-2 text-xs border rounded-lg bg-slate-100 text-slate-600 font-mono focus:outline-none"
+                                                />
                                                 <button onClick={() => handleCopy(currentTxHash, 'debug_tx')} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors" title="Copy Hash">{copiedField === 'debug_tx' ? <CheckCircle size={16} className="text-green-500"/> : <Copy size={16}/>}</button>
                                             </div>
                                         </div>
