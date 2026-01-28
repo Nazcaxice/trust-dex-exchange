@@ -10,16 +10,15 @@ import {
     ShoppingBag, Plus, CreditCard, X, CheckCircle, 
     Loader2, Crown, Settings, MapPin, Minus, Trash2,
     FileText, Clock, ExternalLink, Eye, User, List, ArrowRight, Copy, ArrowLeft, Printer,
-    Wallet
+    Wallet, RefreshCw
 } from 'lucide-react';
 
 // ==========================================
 // CONFIGURATION
 // ==========================================
 const MERCHANT_WALLET = "0xA9b549c00E441A8043eDc267245ADF12533611b4";
-// ✅ เปลี่ยน Link ตาม Chain ที่ใช้ (เช่น BSC Mainnet/Testnet)
-const BLOCK_EXPLORER = "https://sepolia.etherscan.io/tx/"; 
-const EXCHANGE_RATES: Record<string, number> = { "THB": 1, "USDT": 34.5, "ADS": 3.45, "ETH": 85000 };
+const BLOCK_EXPLORER = "https://testnet.bscscan.com/tx/"; 
+const EXCHANGE_RATES: Record<string, number> = { "THB": 1, "USDT": 34.5, "ADS": 10.0, "ETH": 85000 };
 const TOKENS: Record<string, { address: string; decimals: number }> = {
     "USDT": { address: "0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0", decimals: 6 },
     "ADS":  { address: "0xA3b1173bcba20Cf8E6200fDd4ba673DE9efE588C", decimals: 18 },
@@ -41,7 +40,7 @@ export default function MallPage() {
     const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
     const [cart, setCart] = useState<CartItem[]>([]);
     
-    // ✅ VIEW STATE
+    // VIEW STATE
     const [view, setView] = useState<'SHOP' | 'MY_ORDERS'>('SHOP');
 
     // My Orders & Detail State
@@ -61,6 +60,9 @@ export default function MallPage() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [isLoadingData, setIsLoadingData] = useState(false);
     const [statusMessage, setStatusMessage] = useState("");
+    
+    // ✅ เพิ่ม State เก็บ Hash เพื่อใช้ตรวจสอบ Manual
+    const [currentTxHash, setCurrentTxHash] = useState("");
 
     // Fetch Data
     const fetchProducts = async () => {
@@ -131,12 +133,71 @@ export default function MallPage() {
     const finalPriceTHB = cartTotalTHB - discountTHB;
     const cryptoPrice = (finalPriceTHB / EXCHANGE_RATES[selectedToken]).toFixed(6);
 
+    // ✅ ฟังก์ชันบันทึกออเดอร์ (แยกออกมาเพื่อให้เรียกซ้ำได้)
+    const saveOrderToDb = async (txHash: string) => {
+        try {
+            setStatusMessage("Payment confirmed! Saving order...");
+            
+            const earnedPoints = Math.floor(finalPriceTHB / 100);
+            const newPoints = (currentUser?.points || 0) + earnedPoints;
+            let newTier = newPoints > 5000 ? 'Platinum' : newPoints > 1000 ? 'Gold' : 'Silver';
+
+            const { error } = await supabase.from('orders').insert([{
+                buyer_wallet: address, items: cart, total_thb: cartTotalTHB, discount_thb: discountTHB, final_price_thb: finalPriceTHB,
+                payment_token: selectedToken, crypto_amount: parseFloat(cryptoPrice), shipping_info: shippingInfo, status: 'PAID',
+                tx_hash: txHash
+            }]);
+            
+            if (error) throw error;
+            
+            if (address) { 
+                await supabase.from('users').update({ 
+                    points: newPoints, tier: newTier, phone: shippingInfo.phone, shipping_address: shippingInfo.address 
+                }).eq('wallet_address', address); 
+                fetchUser(); 
+            }
+
+            // Reset
+            setCart([]); 
+            setCurrentTxHash("");
+            setStatusMessage("");
+            setCheckoutStep(3);
+            setIsProcessing(false);
+
+        } catch (error: any) {
+            console.error("Save DB Error:", error);
+            alert("Payment successful but failed to save order: " + error.message);
+            setIsProcessing(false);
+        }
+    };
+
+    // ✅ ฟังก์ชันตรวจสอบ Transaction เอง (Manual Check)
+    const handleManualCheck = async () => {
+        if (!currentTxHash || !publicClient) return;
+        
+        setStatusMessage("Checking transaction status...");
+        try {
+            const receipt = await publicClient.getTransactionReceipt({ hash: currentTxHash as `0x${string}` });
+            if (receipt.status === 'success') {
+                await saveOrderToDb(currentTxHash);
+            } else {
+                alert("Transaction is failed or still pending on blockchain.");
+                setStatusMessage("Transaction failed or pending.");
+            }
+        } catch (error) {
+            console.error(error);
+            alert("Transaction not found yet. Please wait a moment and try again.");
+            setStatusMessage("Waiting for confirmation...");
+        }
+    };
+
     const handleCheckout = async () => {
         if (!isConnected) { alert("Please Connect Wallet"); return; }
         if (!shippingInfo.name || !shippingInfo.address) { alert("Please fill shipping details"); setCheckoutStep(1); return; }
         
         setIsProcessing(true);
         setStatusMessage("Please confirm transaction in your wallet...");
+        setCurrentTxHash(""); // Reset previous hash
 
         try {
             const tokenConfig = TOKENS[selectedToken];
@@ -157,42 +218,29 @@ export default function MallPage() {
                 return;
             }
 
-            if (txHash && publicClient) {
+            if (txHash) {
+                setCurrentTxHash(txHash); // ✅ เก็บ Hash ไว้ทันที
                 setStatusMessage("Waiting for transaction confirmation... ⏳");
-                await publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
+                
+                // รออัตโนมัติ
+                if (publicClient) {
+                    await publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
+                    await saveOrderToDb(txHash); // ถ้าผ่าน ให้บันทึกเลย
+                }
             }
-
-            setStatusMessage("Saving order...");
-
-            const earnedPoints = Math.floor(finalPriceTHB / 100);
-            const newPoints = (currentUser?.points || 0) + earnedPoints;
-            let newTier = newPoints > 5000 ? 'Platinum' : newPoints > 1000 ? 'Gold' : 'Silver';
-
-            const { error } = await supabase.from('orders').insert([{
-                buyer_wallet: address, items: cart, total_thb: cartTotalTHB, discount_thb: discountTHB, final_price_thb: finalPriceTHB,
-                payment_token: selectedToken, crypto_amount: parseFloat(cryptoPrice), shipping_info: shippingInfo, status: 'PAID',
-                tx_hash: txHash
-            }]);
-            
-            if (error) throw error;
-            
-            if (address) { 
-                await supabase.from('users').update({ 
-                    points: newPoints, tier: newTier, phone: shippingInfo.phone, shipping_address: shippingInfo.address 
-                }).eq('wallet_address', address); 
-                fetchUser(); 
-            }
-
-            setCart([]); 
-            setStatusMessage("");
-            setCheckoutStep(3);
 
         } catch (error: any) { 
             console.error(error); 
-            alert("Checkout Failed: " + error.message); 
-        } finally { 
-            setIsProcessing(false); 
-        }
+            // ถ้า User กด Reject ให้หยุดเลย แต่ถ้าเป็น Error อื่น (เช่น Timeout) ให้ค้างไว้ให้กด Manual Check
+            if (error.message.includes("User rejected")) {
+                setIsProcessing(false);
+                setStatusMessage("");
+            } else {
+                // กรณีอื่นอาจจะจ่ายแล้วแต่เน็ตหลุด ให้ค้างหน้าจอไว้
+                // alert("Transaction Error: " + error.message);
+            }
+        } 
+        // หมายเหตุ: ไม่ใส่ setIsProcessing(false) ใน finally เพื่อให้หน้าจอค้างรอ Manual Check
     };
 
     return (
@@ -207,9 +255,9 @@ export default function MallPage() {
                     {isConnected && (
                         <button 
                             onClick={() => { setView('MY_ORDERS'); fetchMyOrders(); setSelectedOrder(null); }} 
-                            className={`hidden md:flex items-center gap-1 text-xs font-bold transition-colors border px-2 py-1 rounded-lg ${view === 'MY_ORDERS' ? 'bg-slate-900 text-white border-slate-900' : 'text-slate-500 hover:text-blue-600 hover:border-blue-200'}`}
+                            className={`flex items-center gap-1 text-xs font-bold transition-colors border px-2 py-1 rounded-lg ${view === 'MY_ORDERS' ? 'bg-slate-900 text-white border-slate-900' : 'text-slate-500 hover:text-blue-600 hover:border-blue-200'}`}
                         >
-                            <FileText size={14}/> My Orders
+                            <FileText size={14}/> <span className="hidden sm:inline">My Orders</span>
                         </button>
                     )}
 
@@ -239,7 +287,6 @@ export default function MallPage() {
             </header>
 
             <main className="max-w-6xl mx-auto p-6">
-                
                 {/* 🛒 VIEW 1: SHOP */}
                 {view === 'SHOP' && (
                     <div className="animate-in fade-in">
@@ -251,17 +298,15 @@ export default function MallPage() {
                                             <img src={item.image_url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                                         </div>
                                         <h3 className="font-bold text-slate-800 truncate">{item.name}</h3>
-                                        <div className="flex justify-between items-end mt-2 mb-4">
+                                        <div className="mt-2 mb-4">
                                             <div className="text-orange-600 font-extrabold text-lg">฿{item.price_thb.toLocaleString()}</div>
-                                            <div className="text-xs text-slate-400">≈ {(item.price_thb/EXCHANGE_RATES['USDT']).toFixed(2)} USDT</div>
+                                            <div className="text-xs text-slate-400 mt-1">≈ {(item.price_thb/EXCHANGE_RATES['USDT']).toFixed(2)} USDT</div>
                                         </div>
                                         <button 
                                             onClick={()=>addToCart(item)} 
                                             disabled={addingId === item.id}
                                             className={`w-full py-2 rounded-xl font-bold flex items-center justify-center gap-2 text-sm transition-all duration-200 transform active:scale-95 ${
-                                                addingId === item.id 
-                                                ? "bg-green-500 text-white scale-105 shadow-lg shadow-green-200" 
-                                                : "bg-slate-900 text-white hover:bg-slate-800 hover:shadow-md"
+                                                addingId === item.id ? "bg-green-500 text-white scale-105 shadow-lg shadow-green-200" : "bg-slate-900 text-white hover:bg-slate-800 hover:shadow-md"
                                             }`}
                                         >
                                             {addingId === item.id ? (<><CheckCircle size={16} className="animate-bounce"/> Added!</>) : (<><Plus size={16}/> Add to Cart</>)}
@@ -276,176 +321,60 @@ export default function MallPage() {
                 {/* 📜 VIEW 2: MY ORDERS */}
                 {view === 'MY_ORDERS' && (
                     <div className="animate-in fade-in slide-in-from-right duration-300">
-                        
-                        {/* A. DETAIL MODE */}
                         {selectedOrder ? (
                             <div className="max-w-3xl mx-auto">
+                                {/* ... (Detail Mode Code - Same as previous) ... */}
                                 <div className="flex items-center gap-4 mb-6">
-                                    <button onClick={() => setSelectedOrder(null)} className="p-2 bg-white border rounded-full hover:bg-slate-50 transition-colors shadow-sm text-slate-500 hover:text-slate-800">
-                                        <ArrowLeft size={20} />
-                                    </button>
+                                    <button onClick={() => setSelectedOrder(null)} className="p-2 bg-white border rounded-full hover:bg-slate-50 transition-colors shadow-sm text-slate-500 hover:text-slate-800"><ArrowLeft size={20} /></button>
                                     <div>
-                                        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                                            Order #{selectedOrder.id}
-                                            <span className={`px-3 py-1 rounded-full text-sm font-bold ${selectedOrder.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                                                {selectedOrder.status}
-                                            </span>
-                                        </h1>
-                                        <div className="text-sm text-slate-500 flex items-center gap-2 mt-1">
-                                            <Clock size={14}/> {new Date(selectedOrder.created_at).toLocaleString()}
-                                        </div>
+                                        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">Order #{selectedOrder.id}<span className={`px-3 py-1 rounded-full text-sm font-bold ${selectedOrder.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{selectedOrder.status}</span></h1>
+                                        <div className="text-sm text-slate-500 flex items-center gap-2 mt-1"><Clock size={14}/> {new Date(selectedOrder.created_at).toLocaleString()}</div>
                                     </div>
                                 </div>
-
                                 <div className="space-y-6">
-                                    {/* Items */}
                                     <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-4">
                                         <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b pb-2"><List size={20} className="text-orange-500"/> Order Items</h3>
-                                        {selectedOrder.items?.map((item:any, i:number) => (
-                                            <div key={i} className="flex justify-between items-center text-sm p-2 hover:bg-slate-50 rounded-lg transition-colors">
-                                                <div className="flex items-center gap-4">
-                                                    <img src={item.image_url} className="w-12 h-12 rounded-lg bg-slate-100 border object-cover"/>
-                                                    <div>
-                                                        <div className="font-bold text-slate-700">{item.name}</div>
-                                                        <div className="text-xs text-slate-400">Unit: ฿{item.price_thb.toLocaleString()} x {item.quantity}</div>
-                                                    </div>
-                                                </div>
-                                                <div className="font-bold text-slate-900">฿{(item.price_thb * item.quantity).toLocaleString()}</div>
-                                            </div>
-                                        ))}
-                                        <div className="pt-2 border-t flex justify-between items-center font-bold text-lg text-slate-900 mt-2">
-                                            <span>Total</span>
-                                            <span>฿{selectedOrder.final_price_thb.toLocaleString()}</span>
-                                        </div>
+                                        {selectedOrder.items?.map((item:any, i:number) => (<div key={i} className="flex justify-between items-center text-sm p-2 hover:bg-slate-50 rounded-lg transition-colors"><div className="flex items-center gap-4"><img src={item.image_url} className="w-12 h-12 rounded-lg bg-slate-100 border object-cover"/><div><div className="font-bold text-slate-700">{item.name}</div><div className="text-xs text-slate-400">Unit: ฿{item.price_thb.toLocaleString()} x {item.quantity}</div></div></div><div className="font-bold text-slate-900">฿{(item.price_thb * item.quantity).toLocaleString()}</div></div>))}
+                                        <div className="pt-2 border-t flex justify-between items-center font-bold text-lg text-slate-900 mt-2"><span>Total</span><span>฿{selectedOrder.final_price_thb.toLocaleString()}</span></div>
                                     </div>
-
-                                    {/* Info Grid */}
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                        {/* Shipping */}
-                                        <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-3">
-                                            <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b pb-2"><MapPin size={20} className="text-red-500"/> Shipping</h3>
-                                            <div className="text-sm space-y-1 text-slate-600">
-                                                <p className="font-bold text-slate-800">{selectedOrder.shipping_info?.name}</p>
-                                                <p>{selectedOrder.shipping_info?.phone}</p>
-                                                <p className="leading-relaxed">{selectedOrder.shipping_info?.address}</p>
-                                            </div>
-                                        </div>
-
-                                        {/* ✅ Payment Info (Added Wallets) */}
+                                        <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-3"><h3 className="font-bold text-slate-800 flex items-center gap-2 border-b pb-2"><MapPin size={20} className="text-red-500"/> Shipping</h3><div className="text-sm space-y-1 text-slate-600"><p className="font-bold text-slate-800">{selectedOrder.shipping_info?.name}</p><p>{selectedOrder.shipping_info?.phone}</p><p className="leading-relaxed">{selectedOrder.shipping_info?.address}</p></div></div>
                                         <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-3">
                                             <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b pb-2"><Wallet size={20} className="text-purple-500"/> Payment Info</h3>
                                             <div className="text-sm space-y-3">
-                                                <div className="flex justify-between items-center bg-slate-50 p-2 rounded border">
-                                                    <span className="text-slate-500">Paid Amount</span>
-                                                    <span className="font-mono font-bold text-purple-700">{selectedOrder.crypto_amount} {selectedOrder.payment_token}</span>
-                                                </div>
-
-                                                {/* Buyer Wallet */}
-                                                <div>
-                                                    <span className="text-xs text-slate-400 block mb-1">From (Buyer)</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="font-mono text-xs bg-slate-100 p-2 rounded border text-slate-600 truncate flex-1">
-                                                            {selectedOrder.buyer_wallet}
-                                                        </div>
-                                                        <button onClick={() => handleCopy(selectedOrder.buyer_wallet, 'buyer')} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-800">
-                                                            {copiedField === 'buyer' ? <CheckCircle size={14} className="text-green-500"/> : <Copy size={14}/>}
-                                                        </button>
-                                                    </div>
-                                                </div>
-
-                                                {/* Merchant Wallet */}
-                                                <div>
-                                                    <span className="text-xs text-slate-400 block mb-1">To (Merchant)</span>
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="font-mono text-xs bg-slate-100 p-2 rounded border text-slate-600 truncate flex-1">
-                                                            {MERCHANT_WALLET}
-                                                        </div>
-                                                        <button onClick={() => handleCopy(MERCHANT_WALLET, 'merchant')} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-800">
-                                                            {copiedField === 'merchant' ? <CheckCircle size={14} className="text-green-500"/> : <Copy size={14}/>}
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                                
-                                                {/* Tx Hash */}
-                                                {selectedOrder.tx_hash && (
-                                                    <div className="pt-2 border-t border-slate-100 mt-2">
-                                                        <span className="text-xs text-slate-400 block mb-1">Transaction Hash</span>
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="font-mono text-xs bg-blue-50 p-2 rounded border border-blue-100 text-blue-600 truncate flex-1">
-                                                                {selectedOrder.tx_hash}
-                                                            </div>
-                                                            <button onClick={() => handleCopy(selectedOrder.tx_hash, 'tx')} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-800">
-                                                                {copiedField === 'tx' ? <CheckCircle size={14} className="text-green-500"/> : <Copy size={14}/>}
-                                                            </button>
-                                                            <a href={`${BLOCK_EXPLORER}${selectedOrder.tx_hash}`} target="_blank" rel="noreferrer" className="p-2 hover:bg-blue-100 rounded text-blue-500 hover:text-blue-700">
-                                                                <ExternalLink size={16}/>
-                                                            </a>
-                                                        </div>
-                                                    </div>
-                                                )}
+                                                <div className="flex justify-between items-center bg-slate-50 p-2 rounded border"><span className="text-slate-500">Paid Amount</span><span className="font-mono font-bold text-purple-700">{selectedOrder.crypto_amount} {selectedOrder.payment_token}</span></div>
+                                                <div><span className="text-xs text-slate-400 block mb-1">From (Buyer)</span><div className="flex items-center gap-2"><div className="font-mono text-xs bg-slate-100 p-2 rounded border text-slate-600 truncate flex-1">{selectedOrder.buyer_wallet}</div><button onClick={() => handleCopy(selectedOrder.buyer_wallet, 'buyer')} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-800">{copiedField === 'buyer' ? <CheckCircle size={14} className="text-green-500"/> : <Copy size={14}/>}</button></div></div>
+                                                <div><span className="text-xs text-slate-400 block mb-1">To (Merchant)</span><div className="flex items-center gap-2"><div className="font-mono text-xs bg-slate-100 p-2 rounded border text-slate-600 truncate flex-1">{MERCHANT_WALLET}</div><button onClick={() => handleCopy(MERCHANT_WALLET, 'merchant')} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-800">{copiedField === 'merchant' ? <CheckCircle size={14} className="text-green-500"/> : <Copy size={14}/>}</button></div></div>
+                                                {selectedOrder.tx_hash && (<div className="pt-2 border-t border-slate-100 mt-2"><span className="text-xs text-slate-400 block mb-1">Transaction Hash</span><div className="flex items-center gap-2"><div className="font-mono text-xs bg-blue-50 p-2 rounded border border-blue-100 text-blue-600 truncate flex-1">{selectedOrder.tx_hash}</div><button onClick={() => handleCopy(selectedOrder.tx_hash, 'tx')} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-800">{copiedField === 'tx' ? <CheckCircle size={14} className="text-green-500"/> : <Copy size={14}/>}</button><a href={`${BLOCK_EXPLORER}${selectedOrder.tx_hash}`} target="_blank" rel="noreferrer" className="p-2 hover:bg-blue-100 rounded text-blue-500 hover:text-blue-700"><ExternalLink size={16}/></a></div></div>)}
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         ) : (
-                            // B. LIST MODE
                             <div className="max-w-4xl mx-auto">
                                 <div className="flex justify-between items-center mb-6">
                                     <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><FileText size={28} className="text-blue-600"/> Order History</h2>
-                                    <button onClick={() => setView('SHOP')} className="text-sm font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 border px-3 py-1.5 rounded-lg hover:bg-white hover:shadow-sm transition-all">
-                                        <ArrowLeft size={16}/> Back to Shop
-                                    </button>
+                                    <button onClick={() => setView('SHOP')} className="text-sm font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 border px-3 py-1.5 rounded-lg hover:bg-white hover:shadow-sm transition-all"><ArrowLeft size={16}/> Back to Shop</button>
                                 </div>
-
-                                {isLoadingMyOrders ? (
-                                    <div className="text-center py-20 text-slate-500"><Loader2 className="animate-spin mx-auto mb-2"/> Loading history...</div>
-                                ) : myOrders.length === 0 ? (
-                                    <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-300">
-                                        <ShoppingBag size={48} className="mx-auto text-slate-300 mb-4"/>
-                                        <p className="text-slate-500 font-bold">No orders found.</p>
-                                        <p className="text-xs text-slate-400">Your purchase history will appear here.</p>
-                                    </div>
-                                ) : (
+                                {isLoadingMyOrders ? <div className="text-center py-20 text-slate-500"><Loader2 className="animate-spin mx-auto mb-2"/> Loading history...</div> : myOrders.length === 0 ? <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-300"><ShoppingBag size={48} className="mx-auto text-slate-300 mb-4"/><p className="text-slate-500 font-bold">No orders found.</p><p className="text-xs text-slate-400">Your purchase history will appear here.</p></div> : (
                                     <div className="space-y-4">
                                         {myOrders.map((order) => (
                                             <div key={order.id} className="bg-white p-5 rounded-2xl border shadow-sm hover:shadow-md transition-all group">
                                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4 mb-4">
                                                     <div>
-                                                        <div className="font-bold text-lg text-slate-800 flex items-center gap-2">
-                                                            Order #{order.id}
-                                                            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold border border-green-200">{order.status}</span>
-                                                        </div>
+                                                        <div className="font-bold text-lg text-slate-800 flex items-center gap-2">Order #{order.id}<span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold border border-green-200">{order.status}</span></div>
                                                         <div className="text-xs text-slate-500 flex items-center gap-1 mt-1"><Clock size={12}/> {new Date(order.created_at).toLocaleString()}</div>
                                                     </div>
                                                     <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
-                                                        <div className="text-right">
-                                                            <div className="text-xs text-slate-400">Total Amount</div>
-                                                            <div className="font-extrabold text-slate-900 text-lg">฿{order.final_price_thb.toLocaleString()}</div>
-                                                        </div>
-                                                        
+                                                        <div className="text-right"><div className="text-xs text-slate-400">Total Amount</div><div className="font-extrabold text-slate-900 text-lg">฿{order.final_price_thb.toLocaleString()}</div></div>
                                                         <div className="flex gap-2">
-                                                            {/* ✅ Tx Link Quick Access */}
-                                                            {order.tx_hash && (
-                                                                <a href={`${BLOCK_EXPLORER}${order.tx_hash}`} target="_blank" rel="noreferrer" className="bg-slate-100 text-slate-500 px-3 py-2 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors flex items-center gap-1" title="View Transaction">
-                                                                    <ExternalLink size={16}/>
-                                                                </a>
-                                                            )}
-                                                            <button onClick={() => setSelectedOrder(order)} className="bg-slate-900 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-slate-700 transition-colors flex items-center gap-2 shadow-lg shadow-slate-200">
-                                                                View <ArrowRight size={16}/>
-                                                            </button>
+                                                            {order.tx_hash && (<a href={`${BLOCK_EXPLORER}${order.tx_hash}`} target="_blank" rel="noreferrer" className="bg-slate-100 text-slate-500 px-3 py-2 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors flex items-center gap-1" title="View Transaction"><ExternalLink size={16}/></a>)}
+                                                            <button onClick={() => setSelectedOrder(order)} className="bg-slate-900 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-slate-700 transition-colors flex items-center gap-2 shadow-lg shadow-slate-200">View <ArrowRight size={16}/></button>
                                                         </div>
                                                     </div>
                                                 </div>
-                                                
-                                                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
-                                                    {order.items.map((item:any, i:number) => (
-                                                        <div key={i} className="flex-shrink-0 w-16 h-16 relative group/item">
-                                                            <img src={item.image_url} className="w-full h-full rounded-lg object-cover border bg-slate-50"/>
-                                                            <span className="absolute -top-1 -right-1 bg-slate-900 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full border-2 border-white font-bold">{item.quantity}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">{order.items.map((item:any, i:number) => (<div key={i} className="flex-shrink-0 w-16 h-16 relative group/item"><img src={item.image_url} className="w-full h-full rounded-lg object-cover border bg-slate-50"/><span className="absolute -top-1 -right-1 bg-slate-900 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full border-2 border-white font-bold">{item.quantity}</span></div>))}</div>
                                             </div>
                                         ))}
                                     </div>
@@ -462,76 +391,34 @@ export default function MallPage() {
                     <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
                         <div className="bg-slate-50 p-4 border-b flex justify-between items-center">
                             <h2 className="font-bold text-lg text-slate-800">Checkout Step {checkoutStep}/3</h2>
-                            <button onClick={()=>setIsCheckoutOpen(false)} className="text-slate-500 hover:text-slate-800"><X size={20}/></button>
+                            <button onClick={()=>{setIsCheckoutOpen(false); setCurrentTxHash(""); setIsProcessing(false);}} className="text-slate-500 hover:text-slate-800"><X size={20}/></button>
                         </div>
                         <div className="p-6 overflow-y-auto flex-1">
                             {checkoutStep === 1 && (
                                 <div className="space-y-6">
-                                    <div>
-                                        <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><ShoppingBag size={18}/> Order Summary</h3>
-                                        <div className="bg-slate-50 rounded-xl border p-2 space-y-2 max-h-48 overflow-y-auto">
-                                            {cart.length === 0 ? <p className="text-center text-slate-400 text-sm py-4">Your cart is empty.</p> : cart.map((item) => (
-                                                <div key={item.id} className="flex items-center justify-between p-3 bg-white rounded-lg border shadow-sm">
-                                                    <div className="flex items-center gap-3">
-                                                        <img src={item.image_url} className="w-12 h-12 rounded-md object-cover bg-slate-100 border"/>
-                                                        <div>
-                                                            <div className="text-xs font-bold text-slate-800 truncate w-24 sm:w-32">{item.name}</div>
-                                                            <div className="text-[10px] text-slate-500 mb-1">฿{item.price_thb.toLocaleString()} / unit</div>
-                                                            <div className="flex items-center gap-1">
-                                                                <button onClick={()=>updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded bg-slate-100 hover:bg-slate-200 text-slate-600 border"><Minus size={12}/></button>
-                                                                <span className="text-xs font-bold w-6 text-center">{item.quantity}</span>
-                                                                <button onClick={()=>updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded bg-slate-100 hover:bg-slate-200 text-slate-600 border"><Plus size={12}/></button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex flex-col items-end gap-2">
-                                                        <div className="font-bold text-sm text-slate-900">฿{(item.price_thb * item.quantity).toLocaleString()}</div>
-                                                        <button onClick={()=>removeFromCart(item.id)} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1 rounded transition-colors"><Trash2 size={16}/></button>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                        {cart.length > 0 && (
-                                            <div className="flex justify-between items-center mt-2 px-2">
-                                                <span className="text-xs font-bold text-slate-500">Subtotal</span>
-                                                <span className="text-sm font-extrabold text-slate-800">฿{cartTotalTHB.toLocaleString()}</span>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <div className="border-t pt-4">
-                                        <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><MapPin size={18}/> Shipping Details</h3>
-                                        <div className="space-y-3">
-                                            <div><label className="text-xs font-bold text-slate-500 ml-1">Receiver Name</label><input type="text" value={shippingInfo.name} onChange={e=>setShippingInfo({...shippingInfo, name: e.target.value})} className="w-full border rounded-xl p-3 bg-white text-slate-900 placeholder:text-slate-400 text-sm font-bold" placeholder="Full Name"/></div>
-                                            <div><label className="text-xs font-bold text-slate-500 ml-1">Phone Number</label><input type="tel" value={shippingInfo.phone} onChange={e=>setShippingInfo({...shippingInfo, phone: e.target.value})} className="w-full border rounded-xl p-3 bg-white text-slate-900 placeholder:text-slate-400 text-sm font-bold" placeholder="08x-xxx-xxxx"/></div>
-                                            <div><label className="text-xs font-bold text-slate-500 ml-1">Address</label><textarea value={shippingInfo.address} onChange={e=>setShippingInfo({...shippingInfo, address: e.target.value})} className="w-full border rounded-xl p-3 bg-white text-slate-900 placeholder:text-slate-400 text-sm" rows={3} placeholder="House No, Street, City, Zip Code..."></textarea></div>
-                                        </div>
-                                    </div>
+                                    <div><h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><ShoppingBag size={18}/> Order Summary</h3><div className="bg-slate-50 rounded-xl border p-2 space-y-2 max-h-48 overflow-y-auto">{cart.length === 0 ? <p className="text-center text-slate-400 text-sm py-4">Your cart is empty.</p> : cart.map((item) => (<div key={item.id} className="flex items-center justify-between p-3 bg-white rounded-lg border shadow-sm"><div className="flex items-center gap-3"><img src={item.image_url} className="w-12 h-12 rounded-md object-cover bg-slate-100 border"/><div><div className="text-xs font-bold text-slate-800 truncate w-24 sm:w-32">{item.name}</div><div className="text-[10px] text-slate-500 mb-1">฿{item.price_thb.toLocaleString()} / unit</div><div className="flex items-center gap-1"><button onClick={()=>updateQuantity(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded bg-slate-100 hover:bg-slate-200 text-slate-600 border"><Minus size={12}/></button><span className="text-xs font-bold w-6 text-center">{item.quantity}</span><button onClick={()=>updateQuantity(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded bg-slate-100 hover:bg-slate-200 text-slate-600 border"><Plus size={12}/></button></div></div></div><div className="flex flex-col items-end gap-2"><div className="font-bold text-sm text-slate-900">฿{(item.price_thb * item.quantity).toLocaleString()}</div><button onClick={()=>removeFromCart(item.id)} className="text-red-400 hover:text-red-600 hover:bg-red-50 p-1 rounded transition-colors"><Trash2 size={16}/></button></div></div>))}</div>{cart.length > 0 && (<div className="flex justify-between items-center mt-2 px-2"><span className="text-xs font-bold text-slate-500">Subtotal</span><span className="text-sm font-extrabold text-slate-800">฿{cartTotalTHB.toLocaleString()}</span></div>)}</div>
+                                    <div className="border-t pt-4"><h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><MapPin size={18}/> Shipping Details</h3><div className="space-y-3"><div><label className="text-xs font-bold text-slate-500 ml-1">Receiver Name</label><input type="text" value={shippingInfo.name} onChange={e=>setShippingInfo({...shippingInfo, name: e.target.value})} className="w-full border rounded-xl p-3 bg-white text-slate-900 placeholder:text-slate-400 text-sm font-bold" placeholder="Full Name"/></div><div><label className="text-xs font-bold text-slate-500 ml-1">Phone Number</label><input type="tel" value={shippingInfo.phone} onChange={e=>setShippingInfo({...shippingInfo, phone: e.target.value})} className="w-full border rounded-xl p-3 bg-white text-slate-900 placeholder:text-slate-400 text-sm font-bold" placeholder="08x-xxx-xxxx"/></div><div><label className="text-xs font-bold text-slate-500 ml-1">Address</label><textarea value={shippingInfo.address} onChange={e=>setShippingInfo({...shippingInfo, address: e.target.value})} className="w-full border rounded-xl p-3 bg-white text-slate-900 placeholder:text-slate-400 text-sm" rows={3} placeholder="House No, Street, City, Zip Code..."></textarea></div></div></div>
                                 </div>
                             )}
                             {checkoutStep === 2 && (
                                 <div className="space-y-4">
-                                    <div className="flex justify-between font-bold text-lg">
-                                        <span className="text-slate-600">Total Amount</span>
-                                        <span className="text-orange-600">฿{finalPriceTHB.toLocaleString()}</span>
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-2">
-                                        {Object.keys(TOKENS).map(token => (
-                                            <button key={token} onClick={()=>setSelectedToken(token)} className={`py-3 rounded-xl border font-bold text-sm ${selectedToken===token ? 'bg-slate-900 text-white' : 'bg-white text-slate-600'}`}>{token}</button>
-                                        ))}
-                                    </div>
-                                    <div className="bg-orange-50 p-4 rounded-xl text-center">
-                                        <div className="text-sm text-orange-800">You Pay</div>
-                                        <div className="text-2xl font-extrabold text-slate-900">{cryptoPrice} {selectedToken}</div>
-                                    </div>
+                                    <div className="flex justify-between font-bold text-lg"><span className="text-slate-600">Total Amount</span><span className="text-orange-600">฿{finalPriceTHB.toLocaleString()}</span></div>
+                                    <div className="grid grid-cols-3 gap-2">{Object.keys(TOKENS).map(token => (<button key={token} onClick={()=>setSelectedToken(token)} className={`py-3 rounded-xl border font-bold text-sm ${selectedToken===token ? 'bg-slate-900 text-white' : 'bg-white text-slate-600'}`}>{token}</button>))}</div>
+                                    <div className="bg-orange-50 p-4 rounded-xl text-center"><div className="text-sm text-orange-800">You Pay</div><div className="text-2xl font-extrabold text-slate-900">{cryptoPrice} {selectedToken}</div></div>
+                                    
+                                    {/* ✅ ส่วนแสดงปุ่ม Manual Check */}
+                                    {currentTxHash && isProcessing && (
+                                        <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-center">
+                                            <p className="text-xs text-blue-600 mb-2">If you have paid but the screen is stuck:</p>
+                                            <button onClick={handleManualCheck} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 w-full flex items-center justify-center gap-2">
+                                                <RefreshCw size={16}/> I have paid (Check Status)
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             )}
                             {checkoutStep === 3 && (
-                                <div className="text-center py-10">
-                                    <CheckCircle size={64} className="text-green-500 mx-auto mb-4"/>
-                                    <h3 className="text-2xl font-bold text-slate-800">Success!</h3>
-                                    <p className="text-slate-500">Transaction Confirmed & Order Saved.</p>
-                                </div>
+                                <div className="text-center py-10"><CheckCircle size={64} className="text-green-500 mx-auto mb-4"/><h3 className="text-2xl font-bold text-slate-800">Success!</h3><p className="text-slate-500">Transaction Confirmed & Order Saved.</p></div>
                             )}
                         </div>
                         <div className="p-4 border-t bg-slate-50 flex gap-3">
