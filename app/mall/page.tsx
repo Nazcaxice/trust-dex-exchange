@@ -60,8 +60,6 @@ export default function MallPage() {
     const [isProcessing, setIsProcessing] = useState(false);
     const [isLoadingData, setIsLoadingData] = useState(false);
     const [statusMessage, setStatusMessage] = useState("");
-    
-    // ✅ เพิ่ม State เก็บ Hash เพื่อใช้ตรวจสอบ Manual
     const [currentTxHash, setCurrentTxHash] = useState("");
 
     // Fetch Data
@@ -133,11 +131,10 @@ export default function MallPage() {
     const finalPriceTHB = cartTotalTHB - discountTHB;
     const cryptoPrice = (finalPriceTHB / EXCHANGE_RATES[selectedToken]).toFixed(6);
 
-    // ✅ ฟังก์ชันบันทึกออเดอร์ (แยกออกมาเพื่อให้เรียกซ้ำได้)
+    // Save Order
     const saveOrderToDb = async (txHash: string) => {
         try {
             setStatusMessage("Payment confirmed! Saving order...");
-            
             const earnedPoints = Math.floor(finalPriceTHB / 100);
             const newPoints = (currentUser?.points || 0) + earnedPoints;
             let newTier = newPoints > 5000 ? 'Platinum' : newPoints > 1000 ? 'Gold' : 'Silver';
@@ -149,21 +146,9 @@ export default function MallPage() {
             }]);
             
             if (error) throw error;
-            
-            if (address) { 
-                await supabase.from('users').update({ 
-                    points: newPoints, tier: newTier, phone: shippingInfo.phone, shipping_address: shippingInfo.address 
-                }).eq('wallet_address', address); 
-                fetchUser(); 
-            }
+            if (address) { await supabase.from('users').update({ points: newPoints, tier: newTier, phone: shippingInfo.phone, shipping_address: shippingInfo.address }).eq('wallet_address', address); fetchUser(); }
 
-            // Reset
-            setCart([]); 
-            setCurrentTxHash("");
-            setStatusMessage("");
-            setCheckoutStep(3);
-            setIsProcessing(false);
-
+            setCart([]); setCurrentTxHash(""); setStatusMessage(""); setCheckoutStep(3); setIsProcessing(false);
         } catch (error: any) {
             console.error("Save DB Error:", error);
             alert("Payment successful but failed to save order: " + error.message);
@@ -171,23 +156,23 @@ export default function MallPage() {
         }
     };
 
-    // ✅ ฟังก์ชันตรวจสอบ Transaction เอง (Manual Check)
+    // ✅ Manual Check (Updated with waitForTransactionReceipt)
     const handleManualCheck = async () => {
-        if (!currentTxHash || !publicClient) return;
+        if (!currentTxHash) { alert("Tx Hash not found."); return; }
+        if (!publicClient) return;
         
-        setStatusMessage("Checking transaction status...");
+        setStatusMessage("Checking transaction status... ⏳");
         try {
-            const receipt = await publicClient.getTransactionReceipt({ hash: currentTxHash as `0x${string}` });
+            const receipt = await publicClient.waitForTransactionReceipt({ hash: currentTxHash as `0x${string}`, timeout: 15_000 });
             if (receipt.status === 'success') {
                 await saveOrderToDb(currentTxHash);
             } else {
-                alert("Transaction is failed or still pending on blockchain.");
-                setStatusMessage("Transaction failed or pending.");
+                alert("Transaction Failed on Blockchain."); setStatusMessage("Transaction failed."); setIsProcessing(false);
             }
         } catch (error) {
             console.error(error);
-            alert("Transaction not found yet. Please wait a moment and try again.");
-            setStatusMessage("Waiting for confirmation...");
+            alert("Transaction is likely pending. Please wait 10-30 seconds and try 'Check Status' again.");
+            setStatusMessage("Waiting for confirmation... Try checking again.");
         }
     };
 
@@ -197,120 +182,57 @@ export default function MallPage() {
         
         setIsProcessing(true);
         setStatusMessage("Please confirm transaction in your wallet...");
-        setCurrentTxHash(""); // Reset previous hash
+        setCurrentTxHash(""); 
 
         try {
             const tokenConfig = TOKENS[selectedToken];
             const amountWei = parseUnits(cryptoPrice, tokenConfig.decimals);
             
             let txHash = "";
-
             if (selectedToken !== "ETH") {
-                txHash = await writeContractAsync({ 
-                    address: tokenConfig.address as `0x${string}`, 
-                    abi: ERC20_ABI, 
-                    functionName: 'transfer', 
-                    args: [MERCHANT_WALLET, amountWei] 
-                });
+                txHash = await writeContractAsync({ address: tokenConfig.address as `0x${string}`, abi: ERC20_ABI, functionName: 'transfer', args: [MERCHANT_WALLET, amountWei] });
             } else {
-                alert("ETH payment implementation required sendTransaction hook");
-                setIsProcessing(false);
-                return;
+                alert("ETH payment implementation required sendTransaction hook"); setIsProcessing(false); return;
             }
 
             if (txHash) {
-                setCurrentTxHash(txHash); // ✅ เก็บ Hash ไว้ทันที
+                setCurrentTxHash(txHash);
                 setStatusMessage("Waiting for transaction confirmation... ⏳");
-                
-                // รออัตโนมัติ
                 if (publicClient) {
                     await publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
-                    await saveOrderToDb(txHash); // ถ้าผ่าน ให้บันทึกเลย
+                    await saveOrderToDb(txHash);
                 }
             }
-
         } catch (error: any) { 
             console.error(error); 
-            // ถ้า User กด Reject ให้หยุดเลย แต่ถ้าเป็น Error อื่น (เช่น Timeout) ให้ค้างไว้ให้กด Manual Check
-            if (error.message.includes("User rejected")) {
-                setIsProcessing(false);
-                setStatusMessage("");
-            } else {
-                // กรณีอื่นอาจจะจ่ายแล้วแต่เน็ตหลุด ให้ค้างหน้าจอไว้
-                // alert("Transaction Error: " + error.message);
-            }
+            if (error.message.includes("User rejected")) { setIsProcessing(false); setStatusMessage(""); }
         } 
-        // หมายเหตุ: ไม่ใส่ setIsProcessing(false) ใน finally เพื่อให้หน้าจอค้างรอ Manual Check
     };
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans pb-20 text-slate-900">
-            {/* Header */}
             <header className="bg-white border-b sticky top-0 z-10 px-6 py-4 flex justify-between items-center shadow-sm">
-                <div className="flex items-center gap-2">
-                    <ShoppingBag className="text-orange-600" />
-                    <h1 className="text-xl font-bold text-slate-800">Shopping Mall</h1>
-                </div>
+                <div className="flex items-center gap-2"><ShoppingBag className="text-orange-600" /><h1 className="text-xl font-bold text-slate-800">Shopping Mall</h1></div>
                 <div className="flex items-center gap-4">
-                    {isConnected && (
-                        <button 
-                            onClick={() => { setView('MY_ORDERS'); fetchMyOrders(); setSelectedOrder(null); }} 
-                            className={`flex items-center gap-1 text-xs font-bold transition-colors border px-2 py-1 rounded-lg ${view === 'MY_ORDERS' ? 'bg-slate-900 text-white border-slate-900' : 'text-slate-500 hover:text-blue-600 hover:border-blue-200'}`}
-                        >
-                            <FileText size={14}/> <span className="hidden sm:inline">My Orders</span>
-                        </button>
-                    )}
-
-                    <Link href="/mall/admin" className="hidden md:flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-orange-600 transition-colors border px-2 py-1 rounded-lg">
-                        <Settings size={14}/> Admin System
-                    </Link>
-
-                    {currentUser && (
-                        <div className="hidden md:flex flex-col items-end mr-4">
-                            <div className="text-sm font-bold text-slate-800 flex items-center gap-1">
-                                {currentUser.tier !== 'Silver' && <Crown size={14} className="text-yellow-500 fill-yellow-500"/>}
-                                {currentUser.name}
-                            </div>
-                            <div className="text-xs text-slate-500">{currentUser.points} Points</div>
-                        </div>
-                    )}
-                    
+                    {isConnected && (<button onClick={() => { setView('MY_ORDERS'); fetchMyOrders(); setSelectedOrder(null); }} className={`flex items-center gap-1 text-xs font-bold transition-colors border px-2 py-1 rounded-lg ${view === 'MY_ORDERS' ? 'bg-slate-900 text-white border-slate-900' : 'text-slate-500 hover:text-blue-600 hover:border-blue-200'}`}><FileText size={14}/> <span className="hidden sm:inline">My Orders</span></button>)}
+                    <Link href="/mall/admin" className="hidden md:flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-orange-600 transition-colors border px-2 py-1 rounded-lg"><Settings size={14}/> Admin System</Link>
+                    {currentUser && (<div className="hidden md:flex flex-col items-end mr-4"><div className="text-sm font-bold text-slate-800 flex items-center gap-1">{currentUser.tier !== 'Silver' && <Crown size={14} className="text-yellow-500 fill-yellow-500"/>}{currentUser.name}</div><div className="text-xs text-slate-500">{currentUser.points} Points</div></div>)}
                     <ConnectButton showBalance={false} />
-                    
-                    {view === 'SHOP' && (
-                        <button onClick={()=>{setIsCheckoutOpen(true); setCheckoutStep(1);}} className="relative p-2 bg-slate-900 text-white rounded-full hover:bg-slate-700 transition-all">
-                            <ShoppingBag size={20} />
-                            {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{cart.length}</span>}
-                        </button>
-                    )}
+                    {view === 'SHOP' && (<button onClick={()=>{setIsCheckoutOpen(true); setCheckoutStep(1);}} className="relative p-2 bg-slate-900 text-white rounded-full hover:bg-slate-700 transition-all"><ShoppingBag size={20} />{cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{cart.length}</span>}</button>)}
                 </div>
             </header>
 
             <main className="max-w-6xl mx-auto p-6">
-                {/* 🛒 VIEW 1: SHOP */}
                 {view === 'SHOP' && (
                     <div className="animate-in fade-in">
                         {isLoadingData ? <div className="text-center py-20 text-slate-500"><Loader2 className="animate-spin mx-auto"/> Loading Products...</div> : (
                             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
                                 {products.map((item) => (
                                     <div key={item.id} className="bg-white rounded-2xl p-4 shadow-sm border hover:shadow-lg transition-all group">
-                                        <div className="h-40 bg-slate-100 rounded-xl mb-4 overflow-hidden relative">
-                                            <img src={item.image_url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                                        </div>
+                                        <div className="h-40 bg-slate-100 rounded-xl mb-4 overflow-hidden relative"><img src={item.image_url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" /></div>
                                         <h3 className="font-bold text-slate-800 truncate">{item.name}</h3>
-                                        <div className="mt-2 mb-4">
-                                            <div className="text-orange-600 font-extrabold text-lg">฿{item.price_thb.toLocaleString()}</div>
-                                            <div className="text-xs text-slate-400 mt-1">≈ {(item.price_thb/EXCHANGE_RATES['USDT']).toFixed(2)} USDT</div>
-                                        </div>
-                                        <button 
-                                            onClick={()=>addToCart(item)} 
-                                            disabled={addingId === item.id}
-                                            className={`w-full py-2 rounded-xl font-bold flex items-center justify-center gap-2 text-sm transition-all duration-200 transform active:scale-95 ${
-                                                addingId === item.id ? "bg-green-500 text-white scale-105 shadow-lg shadow-green-200" : "bg-slate-900 text-white hover:bg-slate-800 hover:shadow-md"
-                                            }`}
-                                        >
-                                            {addingId === item.id ? (<><CheckCircle size={16} className="animate-bounce"/> Added!</>) : (<><Plus size={16}/> Add to Cart</>)}
-                                        </button>
+                                        <div className="mt-2 mb-4"><div className="text-orange-600 font-extrabold text-lg">฿{item.price_thb.toLocaleString()}</div><div className="text-xs text-slate-400 mt-1">≈ {(item.price_thb/EXCHANGE_RATES['USDT']).toFixed(2)} USDT</div></div>
+                                        <button onClick={()=>addToCart(item)} disabled={addingId === item.id} className={`w-full py-2 rounded-xl font-bold flex items-center justify-center gap-2 text-sm transition-all duration-200 transform active:scale-95 ${addingId === item.id ? "bg-green-500 text-white scale-105 shadow-lg shadow-green-200" : "bg-slate-900 text-white hover:bg-slate-800 hover:shadow-md"}`}>{addingId === item.id ? (<><CheckCircle size={16} className="animate-bounce"/> Added!</>) : (<><Plus size={16}/> Add to Cart</>)}</button>
                                     </div>
                                 ))}
                             </div>
@@ -318,18 +240,13 @@ export default function MallPage() {
                     </div>
                 )}
 
-                {/* 📜 VIEW 2: MY ORDERS */}
                 {view === 'MY_ORDERS' && (
                     <div className="animate-in fade-in slide-in-from-right duration-300">
                         {selectedOrder ? (
                             <div className="max-w-3xl mx-auto">
-                                {/* ... (Detail Mode Code - Same as previous) ... */}
                                 <div className="flex items-center gap-4 mb-6">
                                     <button onClick={() => setSelectedOrder(null)} className="p-2 bg-white border rounded-full hover:bg-slate-50 transition-colors shadow-sm text-slate-500 hover:text-slate-800"><ArrowLeft size={20} /></button>
-                                    <div>
-                                        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">Order #{selectedOrder.id}<span className={`px-3 py-1 rounded-full text-sm font-bold ${selectedOrder.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{selectedOrder.status}</span></h1>
-                                        <div className="text-sm text-slate-500 flex items-center gap-2 mt-1"><Clock size={14}/> {new Date(selectedOrder.created_at).toLocaleString()}</div>
-                                    </div>
+                                    <div><h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">Order #{selectedOrder.id}<span className={`px-3 py-1 rounded-full text-sm font-bold ${selectedOrder.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{selectedOrder.status}</span></h1><div className="text-sm text-slate-500 flex items-center gap-2 mt-1"><Clock size={14}/> {new Date(selectedOrder.created_at).toLocaleString()}</div></div>
                                 </div>
                                 <div className="space-y-6">
                                     <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-4">
@@ -353,10 +270,7 @@ export default function MallPage() {
                             </div>
                         ) : (
                             <div className="max-w-4xl mx-auto">
-                                <div className="flex justify-between items-center mb-6">
-                                    <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><FileText size={28} className="text-blue-600"/> Order History</h2>
-                                    <button onClick={() => setView('SHOP')} className="text-sm font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 border px-3 py-1.5 rounded-lg hover:bg-white hover:shadow-sm transition-all"><ArrowLeft size={16}/> Back to Shop</button>
-                                </div>
+                                <div className="flex justify-between items-center mb-6"><h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><FileText size={28} className="text-blue-600"/> Order History</h2><button onClick={() => setView('SHOP')} className="text-sm font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 border px-3 py-1.5 rounded-lg hover:bg-white hover:shadow-sm transition-all"><ArrowLeft size={16}/> Back to Shop</button></div>
                                 {isLoadingMyOrders ? <div className="text-center py-20 text-slate-500"><Loader2 className="animate-spin mx-auto mb-2"/> Loading history...</div> : myOrders.length === 0 ? <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-300"><ShoppingBag size={48} className="mx-auto text-slate-300 mb-4"/><p className="text-slate-500 font-bold">No orders found.</p><p className="text-xs text-slate-400">Your purchase history will appear here.</p></div> : (
                                     <div className="space-y-4">
                                         {myOrders.map((order) => (
@@ -385,14 +299,10 @@ export default function MallPage() {
                 )}
             </main>
 
-            {/* CHECKOUT MODAL */}
             {isCheckoutOpen && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm text-slate-900">
                     <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
-                        <div className="bg-slate-50 p-4 border-b flex justify-between items-center">
-                            <h2 className="font-bold text-lg text-slate-800">Checkout Step {checkoutStep}/3</h2>
-                            <button onClick={()=>{setIsCheckoutOpen(false); setCurrentTxHash(""); setIsProcessing(false);}} className="text-slate-500 hover:text-slate-800"><X size={20}/></button>
-                        </div>
+                        <div className="bg-slate-50 p-4 border-b flex justify-between items-center"><h2 className="font-bold text-lg text-slate-800">Checkout Step {checkoutStep}/3</h2><button onClick={()=>{setIsCheckoutOpen(false); setCurrentTxHash(""); setIsProcessing(false);}} className="text-slate-500 hover:text-slate-800"><X size={20}/></button></div>
                         <div className="p-6 overflow-y-auto flex-1">
                             {checkoutStep === 1 && (
                                 <div className="space-y-6">
@@ -406,13 +316,11 @@ export default function MallPage() {
                                     <div className="grid grid-cols-3 gap-2">{Object.keys(TOKENS).map(token => (<button key={token} onClick={()=>setSelectedToken(token)} className={`py-3 rounded-xl border font-bold text-sm ${selectedToken===token ? 'bg-slate-900 text-white' : 'bg-white text-slate-600'}`}>{token}</button>))}</div>
                                     <div className="bg-orange-50 p-4 rounded-xl text-center"><div className="text-sm text-orange-800">You Pay</div><div className="text-2xl font-extrabold text-slate-900">{cryptoPrice} {selectedToken}</div></div>
                                     
-                                    {/* ✅ ส่วนแสดงปุ่ม Manual Check */}
+                                    {/* Manual Check Button */}
                                     {currentTxHash && isProcessing && (
                                         <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-center">
                                             <p className="text-xs text-blue-600 mb-2">If you have paid but the screen is stuck:</p>
-                                            <button onClick={handleManualCheck} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 w-full flex items-center justify-center gap-2">
-                                                <RefreshCw size={16}/> I have paid (Check Status)
-                                            </button>
+                                            <button onClick={handleManualCheck} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 w-full flex items-center justify-center gap-2"><RefreshCw size={16}/> I have paid (Check Status)</button>
                                         </div>
                                     )}
                                 </div>
@@ -423,13 +331,7 @@ export default function MallPage() {
                         </div>
                         <div className="p-4 border-t bg-slate-50 flex gap-3">
                             {checkoutStep === 1 && <button onClick={()=>setCheckoutStep(2)} disabled={cart.length === 0} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-800 transition-colors">Next</button>}
-                            
-                            {checkoutStep === 2 && (
-                                <button onClick={handleCheckout} disabled={isProcessing} className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold disabled:opacity-70 flex justify-center items-center gap-2">
-                                    {isProcessing ? <><Loader2 className="animate-spin" size={18}/> {statusMessage || "Processing..."}</> : "Pay Now"}
-                                </button>
-                            )}
-                            
+                            {checkoutStep === 2 && <button onClick={handleCheckout} disabled={isProcessing} className="w-full bg-orange-600 text-white py-3 rounded-xl font-bold disabled:opacity-70 flex justify-center items-center gap-2">{isProcessing ? <><Loader2 className="animate-spin" size={18}/> {statusMessage || "Processing..."}</> : "Pay Now"}</button>}
                             {checkoutStep === 3 && <button onClick={()=>{setIsCheckoutOpen(false); setCheckoutStep(1);}} className="w-full bg-slate-900 text-white py-3 rounded-xl font-bold">Close</button>}
                         </div>
                     </div>
