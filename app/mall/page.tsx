@@ -8,13 +8,17 @@ import { parseUnits, parseAbi } from 'viem';
 import { supabase } from '@/lib/supabaseClient';
 import { 
     ShoppingBag, Plus, CreditCard, X, CheckCircle, 
-    Loader2, Crown, Settings, MapPin, Minus, Trash2
+    Loader2, Crown, Settings, MapPin, Minus, Trash2,
+    FileText, Clock, ExternalLink, Eye, User, List, ArrowRight, Copy, ArrowLeft, Printer,
+    Wallet
 } from 'lucide-react';
 
 // ==========================================
 // CONFIGURATION
 // ==========================================
 const MERCHANT_WALLET = "0xA9b549c00E441A8043eDc267245ADF12533611b4";
+// ✅ เปลี่ยน Link ตาม Chain ที่ใช้ (เช่น BSC Mainnet/Testnet)
+const BLOCK_EXPLORER = "https://testnet.bscscan.com/tx/"; 
 const EXCHANGE_RATES: Record<string, number> = { "THB": 1, "USDT": 34.5, "ADS": 10.0, "ETH": 85000 };
 const TOKENS: Record<string, { address: string; decimals: number }> = {
     "USDT": { address: "0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0", decimals: 6 },
@@ -37,7 +41,16 @@ export default function MallPage() {
     const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
     const [cart, setCart] = useState<CartItem[]>([]);
     
-    // ✅ Animation State (เก็บ ID สินค้าที่กำลังถูกกด)
+    // ✅ VIEW STATE
+    const [view, setView] = useState<'SHOP' | 'MY_ORDERS'>('SHOP');
+
+    // My Orders & Detail State
+    const [myOrders, setMyOrders] = useState<any[]>([]);
+    const [isLoadingMyOrders, setIsLoadingMyOrders] = useState(false);
+    const [selectedOrder, setSelectedOrder] = useState<any>(null);
+    const [copiedField, setCopiedField] = useState<string | null>(null);
+
+    // Animation State
     const [addingId, setAddingId] = useState<number | null>(null);
 
     // Checkout State
@@ -70,25 +83,31 @@ export default function MallPage() {
         }
     };
 
+    const fetchMyOrders = async () => {
+        if (!address) return;
+        setIsLoadingMyOrders(true);
+        const { data } = await supabase.from('orders')
+            .select('*')
+            .eq('buyer_wallet', address)
+            .order('created_at', { ascending: false });
+        setMyOrders(data || []);
+        setIsLoadingMyOrders(false);
+    };
+
     useEffect(() => { fetchProducts(); }, []);
     useEffect(() => { if (isConnected && address) fetchUser(); else setCurrentUser(null); }, [isConnected, address]);
 
     // Actions
     const addToCart = (product: Product) => {
-        // 1. เพิ่มสินค้าลงตะกร้า
         setCart(prev => {
             const exist = prev.find(p => p.id === product.id);
             return exist ? prev.map(p => p.id === product.id ? { ...p, quantity: p.quantity + 1 } : p) : [...prev, { ...product, quantity: 1 }];
         });
-
-        // 2. ✅ เล่น Animation (เปลี่ยนสถานะปุ่มชั่วคราว)
         setAddingId(product.id);
-        setTimeout(() => setAddingId(null), 500); // กลับเป็นปกติหลัง 0.5 วินาที
+        setTimeout(() => setAddingId(null), 500);
     };
 
-    const removeFromCart = (productId: number) => {
-        setCart(prev => prev.filter(p => p.id !== productId));
-    };
+    const removeFromCart = (productId: number) => setCart(prev => prev.filter(p => p.id !== productId));
 
     const updateQuantity = (productId: number, delta: number) => {
         setCart(prev => prev.map(p => {
@@ -98,6 +117,13 @@ export default function MallPage() {
             }
             return p;
         }));
+    };
+
+    const handleCopy = (text: string, fieldId: string) => {
+        if (!text) return;
+        navigator.clipboard.writeText(text);
+        setCopiedField(fieldId);
+        setTimeout(() => setCopiedField(null), 2000);
     };
 
     const cartTotalTHB = cart.reduce((sum, item) => sum + (item.price_thb * item.quantity), 0);
@@ -178,6 +204,15 @@ export default function MallPage() {
                     <h1 className="text-xl font-bold text-slate-800">Shopping Mall</h1>
                 </div>
                 <div className="flex items-center gap-4">
+                    {isConnected && (
+                        <button 
+                            onClick={() => { setView('MY_ORDERS'); fetchMyOrders(); setSelectedOrder(null); }} 
+                            className={`hidden md:flex items-center gap-1 text-xs font-bold transition-colors border px-2 py-1 rounded-lg ${view === 'MY_ORDERS' ? 'bg-slate-900 text-white border-slate-900' : 'text-slate-500 hover:text-blue-600 hover:border-blue-200'}`}
+                        >
+                            <FileText size={14}/> My Orders
+                        </button>
+                    )}
+
                     <Link href="/mall/admin" className="hidden md:flex items-center gap-1 text-xs font-bold text-slate-400 hover:text-orange-600 transition-colors border px-2 py-1 rounded-lg">
                         <Settings size={14}/> Admin System
                     </Link>
@@ -194,50 +229,231 @@ export default function MallPage() {
                     
                     <ConnectButton showBalance={false} />
                     
-                    <button onClick={()=>{setIsCheckoutOpen(true); setCheckoutStep(1);}} className="relative p-2 bg-slate-900 text-white rounded-full hover:bg-slate-700 transition-all">
-                        <ShoppingBag size={20} />
-                        {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{cart.length}</span>}
-                    </button>
+                    {view === 'SHOP' && (
+                        <button onClick={()=>{setIsCheckoutOpen(true); setCheckoutStep(1);}} className="relative p-2 bg-slate-900 text-white rounded-full hover:bg-slate-700 transition-all">
+                            <ShoppingBag size={20} />
+                            {cart.length > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full font-bold">{cart.length}</span>}
+                        </button>
+                    )}
                 </div>
             </header>
 
             <main className="max-w-6xl mx-auto p-6">
-                <div className="animate-in fade-in">
-                    {isLoadingData ? <div className="text-center py-20 text-slate-500"><Loader2 className="animate-spin mx-auto"/> Loading Products...</div> : (
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                            {products.map((item) => (
-                                <div key={item.id} className="bg-white rounded-2xl p-4 shadow-sm border hover:shadow-lg transition-all group">
-                                    <div className="h-40 bg-slate-100 rounded-xl mb-4 overflow-hidden relative">
-                                        <img src={item.image_url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                
+                {/* 🛒 VIEW 1: SHOP */}
+                {view === 'SHOP' && (
+                    <div className="animate-in fade-in">
+                        {isLoadingData ? <div className="text-center py-20 text-slate-500"><Loader2 className="animate-spin mx-auto"/> Loading Products...</div> : (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                                {products.map((item) => (
+                                    <div key={item.id} className="bg-white rounded-2xl p-4 shadow-sm border hover:shadow-lg transition-all group">
+                                        <div className="h-40 bg-slate-100 rounded-xl mb-4 overflow-hidden relative">
+                                            <img src={item.image_url} alt={item.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                                        </div>
+                                        <h3 className="font-bold text-slate-800 truncate">{item.name}</h3>
+                                        <div className="flex justify-between items-end mt-2 mb-4">
+                                            <div className="text-orange-600 font-extrabold text-lg">฿{item.price_thb.toLocaleString()}</div>
+                                            <div className="text-xs text-slate-400">≈ {(item.price_thb/EXCHANGE_RATES['USDT']).toFixed(2)} USDT</div>
+                                        </div>
+                                        <button 
+                                            onClick={()=>addToCart(item)} 
+                                            disabled={addingId === item.id}
+                                            className={`w-full py-2 rounded-xl font-bold flex items-center justify-center gap-2 text-sm transition-all duration-200 transform active:scale-95 ${
+                                                addingId === item.id 
+                                                ? "bg-green-500 text-white scale-105 shadow-lg shadow-green-200" 
+                                                : "bg-slate-900 text-white hover:bg-slate-800 hover:shadow-md"
+                                            }`}
+                                        >
+                                            {addingId === item.id ? (<><CheckCircle size={16} className="animate-bounce"/> Added!</>) : (<><Plus size={16}/> Add to Cart</>)}
+                                        </button>
                                     </div>
-                                    <h3 className="font-bold text-slate-800 truncate">{item.name}</h3>
-                                    <div className="flex justify-between items-end mt-2 mb-4">
-                                        <div className="text-orange-600 font-extrabold text-lg">฿{item.price_thb.toLocaleString()}</div>
-                                        <div className="text-xs text-slate-400">≈ {(item.price_thb/EXCHANGE_RATES['USDT']).toFixed(2)} USDT</div>
-                                    </div>
-                                    
-                                    {/* ✅ ปุ่ม Add to Cart พร้อม Animation */}
-                                    <button 
-                                        onClick={()=>addToCart(item)} 
-                                        disabled={addingId === item.id}
-                                        className={`w-full py-2 rounded-xl font-bold flex items-center justify-center gap-2 text-sm transition-all duration-200 transform active:scale-95 ${
-                                            addingId === item.id 
-                                            ? "bg-green-500 text-white scale-105 shadow-lg shadow-green-200" 
-                                            : "bg-slate-900 text-white hover:bg-slate-800 hover:shadow-md"
-                                        }`}
-                                    >
-                                        {addingId === item.id ? (
-                                            <><CheckCircle size={16} className="animate-bounce"/> Added!</>
-                                        ) : (
-                                            <><Plus size={16}/> Add to Cart</>
-                                        )}
-                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
 
+                {/* 📜 VIEW 2: MY ORDERS */}
+                {view === 'MY_ORDERS' && (
+                    <div className="animate-in fade-in slide-in-from-right duration-300">
+                        
+                        {/* A. DETAIL MODE */}
+                        {selectedOrder ? (
+                            <div className="max-w-3xl mx-auto">
+                                <div className="flex items-center gap-4 mb-6">
+                                    <button onClick={() => setSelectedOrder(null)} className="p-2 bg-white border rounded-full hover:bg-slate-50 transition-colors shadow-sm text-slate-500 hover:text-slate-800">
+                                        <ArrowLeft size={20} />
+                                    </button>
+                                    <div>
+                                        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                                            Order #{selectedOrder.id}
+                                            <span className={`px-3 py-1 rounded-full text-sm font-bold ${selectedOrder.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                                {selectedOrder.status}
+                                            </span>
+                                        </h1>
+                                        <div className="text-sm text-slate-500 flex items-center gap-2 mt-1">
+                                            <Clock size={14}/> {new Date(selectedOrder.created_at).toLocaleString()}
+                                        </div>
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
+
+                                <div className="space-y-6">
+                                    {/* Items */}
+                                    <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-4">
+                                        <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b pb-2"><List size={20} className="text-orange-500"/> Order Items</h3>
+                                        {selectedOrder.items?.map((item:any, i:number) => (
+                                            <div key={i} className="flex justify-between items-center text-sm p-2 hover:bg-slate-50 rounded-lg transition-colors">
+                                                <div className="flex items-center gap-4">
+                                                    <img src={item.image_url} className="w-12 h-12 rounded-lg bg-slate-100 border object-cover"/>
+                                                    <div>
+                                                        <div className="font-bold text-slate-700">{item.name}</div>
+                                                        <div className="text-xs text-slate-400">Unit: ฿{item.price_thb.toLocaleString()} x {item.quantity}</div>
+                                                    </div>
+                                                </div>
+                                                <div className="font-bold text-slate-900">฿{(item.price_thb * item.quantity).toLocaleString()}</div>
+                                            </div>
+                                        ))}
+                                        <div className="pt-2 border-t flex justify-between items-center font-bold text-lg text-slate-900 mt-2">
+                                            <span>Total</span>
+                                            <span>฿{selectedOrder.final_price_thb.toLocaleString()}</span>
+                                        </div>
+                                    </div>
+
+                                    {/* Info Grid */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* Shipping */}
+                                        <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-3">
+                                            <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b pb-2"><MapPin size={20} className="text-red-500"/> Shipping</h3>
+                                            <div className="text-sm space-y-1 text-slate-600">
+                                                <p className="font-bold text-slate-800">{selectedOrder.shipping_info?.name}</p>
+                                                <p>{selectedOrder.shipping_info?.phone}</p>
+                                                <p className="leading-relaxed">{selectedOrder.shipping_info?.address}</p>
+                                            </div>
+                                        </div>
+
+                                        {/* ✅ Payment Info (Added Wallets) */}
+                                        <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-3">
+                                            <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b pb-2"><Wallet size={20} className="text-purple-500"/> Payment Info</h3>
+                                            <div className="text-sm space-y-3">
+                                                <div className="flex justify-between items-center bg-slate-50 p-2 rounded border">
+                                                    <span className="text-slate-500">Paid Amount</span>
+                                                    <span className="font-mono font-bold text-purple-700">{selectedOrder.crypto_amount} {selectedOrder.payment_token}</span>
+                                                </div>
+
+                                                {/* Buyer Wallet */}
+                                                <div>
+                                                    <span className="text-xs text-slate-400 block mb-1">From (Buyer)</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="font-mono text-xs bg-slate-100 p-2 rounded border text-slate-600 truncate flex-1">
+                                                            {selectedOrder.buyer_wallet}
+                                                        </div>
+                                                        <button onClick={() => handleCopy(selectedOrder.buyer_wallet, 'buyer')} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-800">
+                                                            {copiedField === 'buyer' ? <CheckCircle size={14} className="text-green-500"/> : <Copy size={14}/>}
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Merchant Wallet */}
+                                                <div>
+                                                    <span className="text-xs text-slate-400 block mb-1">To (Merchant)</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="font-mono text-xs bg-slate-100 p-2 rounded border text-slate-600 truncate flex-1">
+                                                            {MERCHANT_WALLET}
+                                                        </div>
+                                                        <button onClick={() => handleCopy(MERCHANT_WALLET, 'merchant')} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-800">
+                                                            {copiedField === 'merchant' ? <CheckCircle size={14} className="text-green-500"/> : <Copy size={14}/>}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                
+                                                {/* Tx Hash */}
+                                                {selectedOrder.tx_hash && (
+                                                    <div className="pt-2 border-t border-slate-100 mt-2">
+                                                        <span className="text-xs text-slate-400 block mb-1">Transaction Hash</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="font-mono text-xs bg-blue-50 p-2 rounded border border-blue-100 text-blue-600 truncate flex-1">
+                                                                {selectedOrder.tx_hash}
+                                                            </div>
+                                                            <button onClick={() => handleCopy(selectedOrder.tx_hash, 'tx')} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-800">
+                                                                {copiedField === 'tx' ? <CheckCircle size={14} className="text-green-500"/> : <Copy size={14}/>}
+                                                            </button>
+                                                            <a href={`${BLOCK_EXPLORER}${selectedOrder.tx_hash}`} target="_blank" rel="noreferrer" className="p-2 hover:bg-blue-100 rounded text-blue-500 hover:text-blue-700">
+                                                                <ExternalLink size={16}/>
+                                                            </a>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            // B. LIST MODE
+                            <div className="max-w-4xl mx-auto">
+                                <div className="flex justify-between items-center mb-6">
+                                    <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2"><FileText size={28} className="text-blue-600"/> Order History</h2>
+                                    <button onClick={() => setView('SHOP')} className="text-sm font-bold text-slate-500 hover:text-slate-800 flex items-center gap-1 border px-3 py-1.5 rounded-lg hover:bg-white hover:shadow-sm transition-all">
+                                        <ArrowLeft size={16}/> Back to Shop
+                                    </button>
+                                </div>
+
+                                {isLoadingMyOrders ? (
+                                    <div className="text-center py-20 text-slate-500"><Loader2 className="animate-spin mx-auto mb-2"/> Loading history...</div>
+                                ) : myOrders.length === 0 ? (
+                                    <div className="text-center py-20 bg-white rounded-3xl border border-dashed border-slate-300">
+                                        <ShoppingBag size={48} className="mx-auto text-slate-300 mb-4"/>
+                                        <p className="text-slate-500 font-bold">No orders found.</p>
+                                        <p className="text-xs text-slate-400">Your purchase history will appear here.</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {myOrders.map((order) => (
+                                            <div key={order.id} className="bg-white p-5 rounded-2xl border shadow-sm hover:shadow-md transition-all group">
+                                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4 mb-4">
+                                                    <div>
+                                                        <div className="font-bold text-lg text-slate-800 flex items-center gap-2">
+                                                            Order #{order.id}
+                                                            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold border border-green-200">{order.status}</span>
+                                                        </div>
+                                                        <div className="text-xs text-slate-500 flex items-center gap-1 mt-1"><Clock size={12}/> {new Date(order.created_at).toLocaleString()}</div>
+                                                    </div>
+                                                    <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
+                                                        <div className="text-right">
+                                                            <div className="text-xs text-slate-400">Total Amount</div>
+                                                            <div className="font-extrabold text-slate-900 text-lg">฿{order.final_price_thb.toLocaleString()}</div>
+                                                        </div>
+                                                        
+                                                        <div className="flex gap-2">
+                                                            {/* ✅ Tx Link Quick Access */}
+                                                            {order.tx_hash && (
+                                                                <a href={`${BLOCK_EXPLORER}${order.tx_hash}`} target="_blank" rel="noreferrer" className="bg-slate-100 text-slate-500 px-3 py-2 rounded-xl font-bold text-sm hover:bg-slate-200 transition-colors flex items-center gap-1" title="View Transaction">
+                                                                    <ExternalLink size={16}/>
+                                                                </a>
+                                                            )}
+                                                            <button onClick={() => setSelectedOrder(order)} className="bg-slate-900 text-white px-4 py-2 rounded-xl font-bold text-sm hover:bg-slate-700 transition-colors flex items-center gap-2 shadow-lg shadow-slate-200">
+                                                                View <ArrowRight size={16}/>
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+                                                    {order.items.map((item:any, i:number) => (
+                                                        <div key={i} className="flex-shrink-0 w-16 h-16 relative group/item">
+                                                            <img src={item.image_url} className="w-full h-full rounded-lg object-cover border bg-slate-50"/>
+                                                            <span className="absolute -top-1 -right-1 bg-slate-900 text-white text-[10px] w-5 h-5 flex items-center justify-center rounded-full border-2 border-white font-bold">{item.quantity}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
             </main>
 
             {/* CHECKOUT MODAL */}
@@ -251,7 +467,6 @@ export default function MallPage() {
                         <div className="p-6 overflow-y-auto flex-1">
                             {checkoutStep === 1 && (
                                 <div className="space-y-6">
-                                    {/* Order Summary */}
                                     <div>
                                         <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><ShoppingBag size={18}/> Order Summary</h3>
                                         <div className="bg-slate-50 rounded-xl border p-2 space-y-2 max-h-48 overflow-y-auto">
@@ -284,7 +499,6 @@ export default function MallPage() {
                                         )}
                                     </div>
 
-                                    {/* Shipping Form */}
                                     <div className="border-t pt-4">
                                         <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><MapPin size={18}/> Shipping Details</h3>
                                         <div className="space-y-3">
