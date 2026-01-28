@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useWriteContract, usePublicClient, useChainId, useSwitchChain } from 'wagmi'; // ✅ เพิ่ม useChainId, useSwitchChain
+import { useAccount, useWriteContract, usePublicClient, useChainId, useSwitchChain } from 'wagmi';
 import { parseUnits, parseAbi } from 'viem';
 import { supabase } from '@/lib/supabaseClient';
 import { 
@@ -436,11 +436,7 @@ export default function MallPage() {
                                                     readOnly 
                                                     className="w-full p-2 text-xs border rounded-lg bg-slate-100 text-slate-600 font-mono focus:outline-none"
                                                 />
-                                                <button 
-                                                    onClick={() => handleCopy(currentTxHash, 'debug_tx')} 
-                                                    className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
-                                                    title="Copy Hash"
-                                                >
+                                                <button onClick={() => handleCopy(currentTxHash, 'debug_tx')} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors" title="Copy Hash">
                                                     {copiedField === 'debug_tx' ? <CheckCircle size={16} className="text-green-500"/> : <Copy size={16}/>}
                                                 </button>
                                             </div>
