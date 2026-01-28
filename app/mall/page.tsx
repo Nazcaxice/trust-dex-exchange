@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { ConnectButton } from '@rainbow-me/rainbowkit';
-import { useAccount, useWriteContract, usePublicClient } from 'wagmi';
+// ✅ 1. เพิ่ม import useChainId และ useSwitchChain
+import { useAccount, useWriteContract, usePublicClient, useChainId, useSwitchChain } from 'wagmi';
 import { parseUnits, parseAbi } from 'viem';
 import { supabase } from '@/lib/supabaseClient';
 import { 
@@ -19,6 +20,9 @@ import {
 const MERCHANT_WALLET = "0xA9b549c00E441A8043eDc267245ADF12533611b4";
 const BLOCK_EXPLORER = "https://sepolia.etherscan.io/tx/"; 
 const EXCHANGE_RATES: Record<string, number> = { "THB": 1, "USDT": 34.5, "ADS": 10.0, "ETH": 85000 };
+// ✅ กำหนด Chain ID ที่ถูกต้อง (Sepolia = 11155111, BSC Testnet = 97)
+const TARGET_CHAIN_ID = 11155111; 
+
 const TOKENS: Record<string, { address: string; decimals: number }> = {
     "USDT": { address: "0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0", decimals: 6 },
     "ADS":  { address: "0xA3b1173bcba20Cf8E6200fDd4ba673DE9efE588C", decimals: 18 },
@@ -34,6 +38,10 @@ export default function MallPage() {
     const { address, isConnected } = useAccount();
     const { writeContractAsync } = useWriteContract();
     const publicClient = usePublicClient();
+    
+    // ✅ 2. เรียกใช้ Hook เพื่อเช็คและสลับ Network
+    const chainId = useChainId();
+    const { switchChain } = useSwitchChain();
 
     // State
     const [products, setProducts] = useState<Product[]>([]);
@@ -62,7 +70,7 @@ export default function MallPage() {
     const [statusMessage, setStatusMessage] = useState("");
     const [currentTxHash, setCurrentTxHash] = useState("");
 
-    // ✅ Effect: ตรวจสอบว่ามี Transaction ค้างอยู่หรือไม่
+    // Effect: ตรวจสอบว่ามี Transaction ค้างอยู่หรือไม่
     useEffect(() => {
         const pendingHash = localStorage.getItem('pendingTxHash');
         const pendingCart = localStorage.getItem('pendingCart');
@@ -175,7 +183,7 @@ export default function MallPage() {
         }
     };
 
-    // ✅ Manual Check (Updated Logic)
+    // ✅ 3. Manual Check (ปรับปรุง: เพิ่มเช็ค Network)
     const handleManualCheck = async () => {
         const hashToCheck = currentTxHash || localStorage.getItem('pendingTxHash');
 
@@ -185,8 +193,24 @@ export default function MallPage() {
             return; 
         }
         
-        setCurrentTxHash(hashToCheck); // Update UI
+        setCurrentTxHash(hashToCheck); 
         if (!publicClient) return;
+
+        // --- 🟢 ส่วนที่เพิ่มใหม่: เช็ค Network ก่อนเริ่ม ---
+        if (chainId !== TARGET_CHAIN_ID) {
+            const isConfirmed = confirm(`⚠️ ผิดเครือข่าย (Wrong Network)!\n\nขณะนี้คุณเชื่อมต่อ: Chain ID ${chainId}\nแต่ระบบต้องการ: Sepolia (Chain ID ${TARGET_CHAIN_ID})\n\nกด "ตกลง" เพื่อสลับเครือข่ายอัตโนมัติ`);
+            
+            if (isConfirmed) {
+                try {
+                    switchChain({ chainId: TARGET_CHAIN_ID });
+                } catch (e:any) {
+                    alert("ไม่สามารถสลับเครือข่ายได้ กรุณาสลับใน MetaMask ด้วยตนเอง");
+                }
+            }
+            // หยุดการทำงานตรงนี้ เพื่อให้ user สลับ network ก่อนแล้วค่อยกดใหม่
+            return; 
+        }
+        // --------------------------------------------------
         
         setStatusMessage("Searching for transaction on network... ⏳");
         
@@ -202,7 +226,7 @@ export default function MallPage() {
                 console.log("Transaction not propagated yet...");
             }
 
-            // 2. รอผลลัพธ์ (เพิ่ม timeout เป็น 60 วินาที)
+            // 2. รอผลลัพธ์
             const receipt = await publicClient.waitForTransactionReceipt({ 
                 hash: hashToCheck as `0x${string}`, 
                 timeout: 60_000, 
@@ -235,6 +259,13 @@ export default function MallPage() {
         if (!isConnected) { alert("Please Connect Wallet"); return; }
         if (!shippingInfo.name || !shippingInfo.address) { alert("Please fill shipping details"); setCheckoutStep(1); return; }
         
+        // เช็ค Network ก่อนกดจ่ายด้วยก็ดี
+        if (chainId !== TARGET_CHAIN_ID) {
+            alert(`กรุณาสลับ Network เป็น Sepolia (${TARGET_CHAIN_ID}) ก่อนทำรายการ`);
+            switchChain({ chainId: TARGET_CHAIN_ID });
+            return;
+        }
+
         setIsProcessing(true);
         setStatusMessage("Please confirm transaction in your wallet...");
         
@@ -253,7 +284,6 @@ export default function MallPage() {
             }
 
             if (txHash) {
-                // บันทึกทันที
                 localStorage.setItem('pendingTxHash', txHash);
                 localStorage.setItem('pendingCart', JSON.stringify(cart));
                 setCurrentTxHash(txHash);
@@ -402,17 +432,8 @@ export default function MallPage() {
                                         <div className="mt-3">
                                             <label className="text-xs text-slate-400 block text-left mb-1">Transaction Hash (Debug):</label>
                                             <div className="flex items-center gap-2">
-                                                <input 
-                                                    type="text" 
-                                                    value={currentTxHash} 
-                                                    readOnly 
-                                                    className="w-full p-2 text-xs border rounded-lg bg-slate-100 text-slate-600 font-mono focus:outline-none"
-                                                />
-                                                <button 
-                                                    onClick={() => handleCopy(currentTxHash, 'debug_tx')} 
-                                                    className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
-                                                    title="Copy Hash"
-                                                >
+                                                <input type="text" value={currentTxHash} readOnly className="w-full p-2 text-xs border rounded-lg bg-slate-100 text-slate-600 font-mono focus:outline-none"/>
+                                                <button onClick={() => handleCopy(currentTxHash, 'debug_tx')} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors" title="Copy Hash">
                                                     {copiedField === 'debug_tx' ? <CheckCircle size={16} className="text-green-500"/> : <Copy size={16}/>}
                                                 </button>
                                             </div>
