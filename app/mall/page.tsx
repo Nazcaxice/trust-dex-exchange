@@ -17,7 +17,7 @@ import {
 // CONFIGURATION
 // ==========================================
 const MERCHANT_WALLET = "0xA9b549c00E441A8043eDc267245ADF12533611b4";
-const BLOCK_EXPLORER = "https://testnet.bscscan.com/tx/"; 
+const BLOCK_EXPLORER = "https://sepolia.etherscan.io/tx/"; 
 const EXCHANGE_RATES: Record<string, number> = { "THB": 1, "USDT": 34.5, "ADS": 10.0, "ETH": 85000 };
 const TOKENS: Record<string, { address: string; decimals: number }> = {
     "USDT": { address: "0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0", decimals: 6 },
@@ -73,7 +73,7 @@ export default function MallPage() {
             setIsCheckoutOpen(true);
             setCheckoutStep(2);
             setStatusMessage("Found pending transaction. Please check status.");
-            setIsProcessing(true); 
+            setIsProcessing(true); // เปิดปุ่มให้กด Check ได้เลย
         }
     }, []);
 
@@ -175,7 +175,7 @@ export default function MallPage() {
         }
     };
 
-    // ✅ Manual Check (Updated: More Robust)
+    // ✅ Manual Check (Updated Logic)
     const handleManualCheck = async () => {
         const hashToCheck = currentTxHash || localStorage.getItem('pendingTxHash');
 
@@ -191,7 +191,7 @@ export default function MallPage() {
         setStatusMessage("Searching for transaction on network... ⏳");
         
         try {
-            // 1. เช็คก่อนว่ามี Transaction นี้ในระบบหรือยัง (Mempool check)
+            // 1. เช็คก่อนว่ามี Transaction นี้ในระบบหรือยัง
             try {
                 const tx = await publicClient.getTransaction({ hash: hashToCheck as `0x${string}` });
                 if (!tx) {
@@ -205,8 +205,8 @@ export default function MallPage() {
             // 2. รอผลลัพธ์ (เพิ่ม timeout เป็น 60 วินาที)
             const receipt = await publicClient.waitForTransactionReceipt({ 
                 hash: hashToCheck as `0x${string}`, 
-                timeout: 60_000, // รอ 60 วินาที
-                pollingInterval: 3_000 // เช็คทุก 3 วินาที
+                timeout: 60_000, 
+                pollingInterval: 3_000 
             });
 
             if (receipt.status === 'success') {
@@ -219,7 +219,6 @@ export default function MallPage() {
             }
         } catch (error: any) {
             console.error(error);
-            // ถ้า Error เพราะ Timeout หรือหาไม่เจอ
             const isTimeout = error.name === 'TimeoutError' || error.message.includes('timed out');
             
             if (isTimeout) {
@@ -398,11 +397,25 @@ export default function MallPage() {
                                     <div className="grid grid-cols-3 gap-2">{Object.keys(TOKENS).map(token => (<button key={token} onClick={()=>setSelectedToken(token)} className={`py-3 rounded-xl border font-bold text-sm ${selectedToken===token ? 'bg-slate-900 text-white' : 'bg-white text-slate-600'}`}>{token}</button>))}</div>
                                     <div className="bg-orange-50 p-4 rounded-xl text-center"><div className="text-sm text-orange-800">You Pay</div><div className="text-2xl font-extrabold text-slate-900">{cryptoPrice} {selectedToken}</div></div>
                                     
-                                    {/* ✅ แสดง Tx Hash ใน Input Box */}
+                                    {/* ✅ แสดง Tx Hash พร้อมปุ่ม Copy */}
                                     {currentTxHash && (
                                         <div className="mt-3">
                                             <label className="text-xs text-slate-400 block text-left mb-1">Transaction Hash (Debug):</label>
-                                            <input type="text" value={currentTxHash} readOnly className="w-full p-2 text-xs border rounded-lg bg-slate-100 text-slate-600 font-mono focus:outline-none"/>
+                                            <div className="flex items-center gap-2">
+                                                <input 
+                                                    type="text" 
+                                                    value={currentTxHash} 
+                                                    readOnly 
+                                                    className="w-full p-2 text-xs border rounded-lg bg-slate-100 text-slate-600 font-mono focus:outline-none"
+                                                />
+                                                <button 
+                                                    onClick={() => handleCopy(currentTxHash, 'debug_tx')} 
+                                                    className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors"
+                                                    title="Copy Hash"
+                                                >
+                                                    {copiedField === 'debug_tx' ? <CheckCircle size={16} className="text-green-500"/> : <Copy size={16}/>}
+                                                </button>
+                                            </div>
                                         </div>
                                     )}
 
