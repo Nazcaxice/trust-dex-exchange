@@ -10,7 +10,7 @@ import {
     ShoppingBag, Plus, CreditCard, X, CheckCircle, 
     Loader2, Crown, Settings, MapPin, Minus, Trash2,
     FileText, Clock, ExternalLink, Eye, User, List, ArrowRight, Copy, ArrowLeft, Printer,
-    Wallet, RefreshCw, AlertTriangle
+    Wallet, RefreshCw, AlertTriangle, XCircle // ✅ เพิ่มไอคอน XCircle
 } from 'lucide-react';
 
 // ==========================================
@@ -37,8 +37,6 @@ export default function MallPage() {
     const { address, isConnected } = useAccount();
     const { writeContractAsync } = useWriteContract();
     const publicClient = usePublicClient();
-    
-    // ✅ เรียกใช้ Hook เพื่อเช็คและสลับ Network
     const chainId = useChainId();
     const { switchChain } = useSwitchChain();
 
@@ -46,20 +44,12 @@ export default function MallPage() {
     const [products, setProducts] = useState<Product[]>([]);
     const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
     const [cart, setCart] = useState<CartItem[]>([]);
-    
-    // VIEW STATE
     const [view, setView] = useState<'SHOP' | 'MY_ORDERS'>('SHOP');
-
-    // My Orders & Detail State
     const [myOrders, setMyOrders] = useState<any[]>([]);
     const [isLoadingMyOrders, setIsLoadingMyOrders] = useState(false);
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
     const [copiedField, setCopiedField] = useState<string | null>(null);
-
-    // Animation State
     const [addingId, setAddingId] = useState<number | null>(null);
-
-    // Checkout State
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
     const [checkoutStep, setCheckoutStep] = useState(1);
     const [shippingInfo, setShippingInfo] = useState({ name: '', address: '', phone: '' });
@@ -69,7 +59,7 @@ export default function MallPage() {
     const [statusMessage, setStatusMessage] = useState("");
     const [currentTxHash, setCurrentTxHash] = useState("");
 
-    // Effect: ตรวจสอบว่ามี Transaction ค้างอยู่หรือไม่
+    // Effect: Resume Transaction
     useEffect(() => {
         const pendingHash = localStorage.getItem('pendingTxHash');
         const pendingCart = localStorage.getItem('pendingCart');
@@ -84,7 +74,7 @@ export default function MallPage() {
         }
     }, []);
 
-    // Fetch Data
+    // Fetch Data Functions ... (คงเดิม)
     const fetchProducts = async () => {
         setIsLoadingData(true);
         const { data, error } = await supabase.from('products').select('*').order('id', { ascending: false });
@@ -119,7 +109,7 @@ export default function MallPage() {
     useEffect(() => { fetchProducts(); }, []);
     useEffect(() => { if (isConnected && address) fetchUser(); else setCurrentUser(null); }, [isConnected, address]);
 
-    // Actions
+    // Helper Functions ... (คงเดิม)
     const addToCart = (product: Product) => {
         setCart(prev => {
             const exist = prev.find(p => p.id === product.id);
@@ -128,25 +118,15 @@ export default function MallPage() {
         setAddingId(product.id);
         setTimeout(() => setAddingId(null), 500);
     };
-
     const removeFromCart = (productId: number) => setCart(prev => prev.filter(p => p.id !== productId));
-
     const updateQuantity = (productId: number, delta: number) => {
         setCart(prev => prev.map(p => {
-            if (p.id === productId) {
-                const newQty = p.quantity + delta;
-                return newQty > 0 ? { ...p, quantity: newQty } : p;
-            }
+            if (p.id === productId) { const newQty = p.quantity + delta; return newQty > 0 ? { ...p, quantity: newQty } : p; }
             return p;
         }));
     };
-
-    // ✅ ฟังก์ชัน Copy พร้อม UI Feedback
     const handleCopy = (text: string, fieldId: string) => {
-        if (!text) return;
-        navigator.clipboard.writeText(text);
-        setCopiedField(fieldId);
-        setTimeout(() => setCopiedField(null), 2000);
+        if (!text) return; navigator.clipboard.writeText(text); setCopiedField(fieldId); setTimeout(() => setCopiedField(null), 2000);
     };
 
     const cartTotalTHB = cart.reduce((sum, item) => sum + (item.price_thb * item.quantity), 0);
@@ -171,10 +151,8 @@ export default function MallPage() {
             if (error) throw error;
             if (address) { await supabase.from('users').update({ points: newPoints, tier: newTier, phone: shippingInfo.phone, shipping_address: shippingInfo.address }).eq('wallet_address', address); fetchUser(); }
 
-            // Clear Storage
             localStorage.removeItem('pendingTxHash');
             localStorage.removeItem('pendingCart');
-
             setCart([]); setCurrentTxHash(""); setStatusMessage(""); setCheckoutStep(3); setIsProcessing(false);
         } catch (error: any) {
             console.error("Save DB Error:", error);
@@ -183,90 +161,68 @@ export default function MallPage() {
         }
     };
 
-    // ✅ Manual Check with Network Enforcement
+    // ✅ Manual Check (Updated: Handle Failed Status)
     const handleManualCheck = async () => {
         const hashToCheck = currentTxHash || localStorage.getItem('pendingTxHash');
-
-        if (!hashToCheck) { 
-            alert("No pending transaction found."); 
-            setIsProcessing(false);
-            return; 
-        }
-        
+        if (!hashToCheck) { alert("No pending transaction found."); setIsProcessing(false); return; }
         setCurrentTxHash(hashToCheck); 
         if (!publicClient) return;
 
-        // ✅ เช็ค Network ก่อน
         if (chainId !== TARGET_CHAIN_ID) {
-            const isConfirmed = confirm(`⚠️ ผิดเครือข่าย (Wrong Network)!\n\nขณะนี้คุณเชื่อมต่อ: Chain ID ${chainId}\nแต่ระบบต้องการ: Sepolia (Chain ID ${TARGET_CHAIN_ID})\n\nกด "ตกลง" เพื่อสลับเครือข่ายอัตโนมัติ`);
-            
-            if (isConfirmed) {
-                try {
-                    switchChain({ chainId: TARGET_CHAIN_ID });
-                } catch (e:any) {
-                    alert("ไม่สามารถสลับเครือข่ายได้ กรุณาสลับใน MetaMask ด้วยตนเอง");
-                }
+            if(confirm(`Wrong Network! Connect to Chain ID ${TARGET_CHAIN_ID}?`)) {
+                try { switchChain({ chainId: TARGET_CHAIN_ID }); } catch(e){}
             }
             return; 
         }
         
-        setStatusMessage("Searching for transaction on network... ⏳");
+        setStatusMessage("Checking transaction status... ⏳");
         
         try {
-            // 1. เช็คก่อนว่ามี Transaction นี้ในระบบหรือยัง
             try {
                 const tx = await publicClient.getTransaction({ hash: hashToCheck as `0x${string}` });
-                if (!tx) {
-                    throw new Error("Transaction not found in mempool yet");
-                }
-                setStatusMessage("Transaction found! Waiting for confirmation... ⏳");
-            } catch (e) {
-                console.log("Transaction not propagated yet...");
-            }
+                if (!tx) throw new Error("Not found in mempool");
+                setStatusMessage("Found! Waiting for confirmation... ⏳");
+            } catch (e) { console.log("Tx not in mempool"); }
 
-            // 2. รอผลลัพธ์
             const receipt = await publicClient.waitForTransactionReceipt({ 
-                hash: hashToCheck as `0x${string}`, 
-                timeout: 60_000, 
-                pollingInterval: 3_000 
+                hash: hashToCheck as `0x${string}`, timeout: 60_000, pollingInterval: 3_000 
             });
 
             if (receipt.status === 'success') {
                 await saveOrderToDb(hashToCheck);
             } else {
-                alert("Transaction Failed/Reverted."); 
-                setStatusMessage("Transaction failed."); 
+                // ❌ Transaction Failed
+                alert("❌ Transaction FAILED on Blockchain!\n(Status: Reverted)\n\nPlease try again.");
+                setStatusMessage("Transaction Failed (Reverted) ❌");
                 setIsProcessing(false);
                 localStorage.removeItem('pendingTxHash'); 
             }
         } catch (error: any) {
             console.error(error);
             const isTimeout = error.name === 'TimeoutError' || error.message.includes('timed out');
-            
             if (isTimeout) {
-                alert("⏳ Network is slow or Transaction is still pending.\n\nPlease wait 30 seconds and click 'Check Status' again.");
-                setStatusMessage("Pending... Please wait and check again.");
+                alert("⏳ Network slow. Please wait 30s and check again.");
+                setStatusMessage("Pending... check again later.");
             } else {
-                alert("Error checking transaction: " + (error.message || "Unknown error"));
-                setStatusMessage("Check failed. Please try again.");
+                alert("Error checking: " + (error.message || "Unknown error"));
+                setStatusMessage("Check failed.");
             }
         }
     };
 
+    // ✅ Handle Checkout (Updated: Auto check status)
     const handleCheckout = async () => {
         if (!isConnected) { alert("Please Connect Wallet"); return; }
         if (!shippingInfo.name || !shippingInfo.address) { alert("Please fill shipping details"); setCheckoutStep(1); return; }
         
-        // เช็ค Network ก่อนกดจ่าย
         if (chainId !== TARGET_CHAIN_ID) {
-            alert(`กรุณาสลับ Network เป็น Sepolia (${TARGET_CHAIN_ID}) ก่อนทำรายการ`);
+            alert(`Wrong Network. Switching to ${TARGET_CHAIN_ID}...`);
             switchChain({ chainId: TARGET_CHAIN_ID });
             return;
         }
 
         setIsProcessing(true);
-        setStatusMessage("Please confirm transaction in your wallet...");
-        
+        setStatusMessage("Please confirm transaction...");
         setCurrentTxHash(""); 
         localStorage.removeItem('pendingTxHash');
 
@@ -286,14 +242,23 @@ export default function MallPage() {
                 localStorage.setItem('pendingCart', JSON.stringify(cart));
                 setCurrentTxHash(txHash);
 
-                setStatusMessage("Waiting for transaction confirmation... ⏳");
+                setStatusMessage("Waiting for confirmation... ⏳");
                 
                 if (publicClient) {
                     try {
-                        await publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
-                        await saveOrderToDb(txHash);
+                        const receipt = await publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
+                        
+                        // ✅ เพิ่มการเช็ค Status ตรงนี้ด้วย
+                        if (receipt.status === 'success') {
+                            await saveOrderToDb(txHash);
+                        } else {
+                            alert("❌ Transaction FAILED (Reverted)!");
+                            setStatusMessage("Transaction Failed ❌");
+                            setIsProcessing(false);
+                            localStorage.removeItem('pendingTxHash');
+                        }
                     } catch (e) {
-                        console.log("Auto wait failed, fallback to manual check");
+                        console.log("Auto wait failed/timeout, user must click manual check");
                     }
                 }
             }
@@ -304,7 +269,7 @@ export default function MallPage() {
     };
 
     const handleClearPending = () => {
-        if(confirm("Are you sure you want to cancel checking this transaction?")) {
+        if(confirm("Cancel transaction check?")) {
             localStorage.removeItem('pendingTxHash');
             localStorage.removeItem('pendingCart');
             setCurrentTxHash("");
@@ -315,7 +280,6 @@ export default function MallPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans pb-20 text-slate-900">
-            {/* Header */}
             <header className="bg-white border-b sticky top-0 z-10 px-6 py-4 flex justify-between items-center shadow-sm">
                 <div className="flex items-center gap-2"><ShoppingBag className="text-orange-600" /><h1 className="text-xl font-bold text-slate-800">Shopping Mall</h1></div>
                 <div className="flex items-center gap-4">
@@ -430,15 +394,8 @@ export default function MallPage() {
                                         <div className="mt-3">
                                             <label className="text-xs text-slate-400 block text-left mb-1">Transaction Hash (Debug):</label>
                                             <div className="flex items-center gap-2">
-                                                <input 
-                                                    type="text" 
-                                                    value={currentTxHash} 
-                                                    readOnly 
-                                                    className="w-full p-2 text-xs border rounded-lg bg-slate-100 text-slate-600 font-mono focus:outline-none"
-                                                />
-                                                <button onClick={() => handleCopy(currentTxHash, 'debug_tx')} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors" title="Copy Hash">
-                                                    {copiedField === 'debug_tx' ? <CheckCircle size={16} className="text-green-500"/> : <Copy size={16}/>}
-                                                </button>
+                                                <input type="text" value={currentTxHash} readOnly className="w-full p-2 text-xs border rounded-lg bg-slate-100 text-slate-600 font-mono focus:outline-none"/>
+                                                <button onClick={() => handleCopy(currentTxHash, 'debug_tx')} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200 text-slate-500 transition-colors" title="Copy Hash">{copiedField === 'debug_tx' ? <CheckCircle size={16} className="text-green-500"/> : <Copy size={16}/>}</button>
                                             </div>
                                         </div>
                                     )}
