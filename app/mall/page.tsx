@@ -62,6 +62,21 @@ export default function MallPage() {
     const [statusMessage, setStatusMessage] = useState("");
     const [currentTxHash, setCurrentTxHash] = useState("");
 
+    // ✅ Effect: ตรวจสอบว่ามี Transaction ค้างอยู่หรือไม่ (แก้ปัญหา Mobile Refresh)
+    useEffect(() => {
+        const pendingHash = localStorage.getItem('pendingTxHash');
+        const pendingCart = localStorage.getItem('pendingCart');
+        
+        if (pendingHash && pendingCart) {
+            setCurrentTxHash(pendingHash);
+            setCart(JSON.parse(pendingCart));
+            setIsCheckoutOpen(true);
+            setCheckoutStep(2);
+            setStatusMessage("Found pending transaction from mobile app. Please check status.");
+            setIsProcessing(true); // เปิดปุ่มให้กด Check ได้เลย
+        }
+    }, []);
+
     // Fetch Data
     const fetchProducts = async () => {
         setIsLoadingData(true);
@@ -148,6 +163,10 @@ export default function MallPage() {
             if (error) throw error;
             if (address) { await supabase.from('users').update({ points: newPoints, tier: newTier, phone: shippingInfo.phone, shipping_address: shippingInfo.address }).eq('wallet_address', address); fetchUser(); }
 
+            // ✅ Clear Storage เมื่อสำเร็จ
+            localStorage.removeItem('pendingTxHash');
+            localStorage.removeItem('pendingCart');
+
             setCart([]); setCurrentTxHash(""); setStatusMessage(""); setCheckoutStep(3); setIsProcessing(false);
         } catch (error: any) {
             console.error("Save DB Error:", error);
@@ -156,23 +175,40 @@ export default function MallPage() {
         }
     };
 
-    // ✅ Manual Check (Updated with waitForTransactionReceipt)
+    // ✅ Manual Check (Updated Logic)
     const handleManualCheck = async () => {
-        if (!currentTxHash) { alert("Tx Hash not found."); return; }
+        // ดึง Hash จาก State หรือ LocalStorage
+        const hashToCheck = currentTxHash || localStorage.getItem('pendingTxHash');
+
+        if (!hashToCheck) { 
+            alert("ไม่พบข้อมูล Transaction Hash กรุณาทำรายการใหม่"); 
+            setIsProcessing(false);
+            return; 
+        }
         if (!publicClient) return;
         
-        setStatusMessage("Checking transaction status... ⏳");
+        setStatusMessage("Checking transaction status on blockchain... ⏳");
+        
         try {
-            const receipt = await publicClient.waitForTransactionReceipt({ hash: currentTxHash as `0x${string}`, timeout: 15_000 });
+            // รอตรวจสอบ (เพิ่ม Timeout 15 วินาที)
+            const receipt = await publicClient.waitForTransactionReceipt({ 
+                hash: hashToCheck as `0x${string}`, 
+                timeout: 15_000 
+            });
+
             if (receipt.status === 'success') {
-                await saveOrderToDb(currentTxHash);
+                await saveOrderToDb(hashToCheck);
             } else {
-                alert("Transaction Failed on Blockchain."); setStatusMessage("Transaction failed."); setIsProcessing(false);
+                alert("Transaction Failed/Reverted on Blockchain."); 
+                setStatusMessage("Transaction failed."); 
+                setIsProcessing(false);
+                localStorage.removeItem('pendingTxHash'); // ลบออกถ้าล้มเหลว
             }
         } catch (error) {
             console.error(error);
-            alert("Transaction is likely pending. Please wait 10-30 seconds and try 'Check Status' again.");
-            setStatusMessage("Waiting for confirmation... Try checking again.");
+            // กรณีรอนานเกินไป หรือยังไม่ Sync
+            alert("Transaction not found YET or Network is slow.\nPlease wait ~10 seconds and click 'Check Status' again.");
+            setStatusMessage("Network slow. Please click 'Check Status' again.");
         }
     };
 
@@ -182,7 +218,10 @@ export default function MallPage() {
         
         setIsProcessing(true);
         setStatusMessage("Please confirm transaction in your wallet...");
+        
+        // Clear old pending
         setCurrentTxHash(""); 
+        localStorage.removeItem('pendingTxHash');
 
         try {
             const tokenConfig = TOKENS[selectedToken];
@@ -196,11 +235,21 @@ export default function MallPage() {
             }
 
             if (txHash) {
+                // ✅ บันทึก Hash ลงเครื่องทันที กันหน้าจอดับ/รีเฟรช
+                localStorage.setItem('pendingTxHash', txHash);
+                localStorage.setItem('pendingCart', JSON.stringify(cart));
                 setCurrentTxHash(txHash);
+
                 setStatusMessage("Waiting for transaction confirmation... ⏳");
+                
                 if (publicClient) {
-                    await publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
-                    await saveOrderToDb(txHash);
+                    // ลองรอแบบ Auto ดูก่อน
+                    try {
+                        await publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
+                        await saveOrderToDb(txHash);
+                    } catch (e) {
+                        console.log("Auto wait failed, user must click manual check");
+                    }
                 }
             }
         } catch (error: any) { 
@@ -209,8 +258,20 @@ export default function MallPage() {
         } 
     };
 
+    // ปุ่ม Reset สำหรับกรณีค้าง
+    const handleClearPending = () => {
+        if(confirm("Are you sure you want to cancel checking this transaction?")) {
+            localStorage.removeItem('pendingTxHash');
+            localStorage.removeItem('pendingCart');
+            setCurrentTxHash("");
+            setIsProcessing(false);
+            setStatusMessage("");
+        }
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 font-sans pb-20 text-slate-900">
+            {/* Header */}
             <header className="bg-white border-b sticky top-0 z-10 px-6 py-4 flex justify-between items-center shadow-sm">
                 <div className="flex items-center gap-2"><ShoppingBag className="text-orange-600" /><h1 className="text-xl font-bold text-slate-800">Shopping Mall</h1></div>
                 <div className="flex items-center gap-4">
@@ -299,10 +360,14 @@ export default function MallPage() {
                 )}
             </main>
 
+            {/* CHECKOUT MODAL */}
             {isCheckoutOpen && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm text-slate-900">
                     <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
-                        <div className="bg-slate-50 p-4 border-b flex justify-between items-center"><h2 className="font-bold text-lg text-slate-800">Checkout Step {checkoutStep}/3</h2><button onClick={()=>{setIsCheckoutOpen(false); setCurrentTxHash(""); setIsProcessing(false);}} className="text-slate-500 hover:text-slate-800"><X size={20}/></button></div>
+                        <div className="bg-slate-50 p-4 border-b flex justify-between items-center">
+                            <h2 className="font-bold text-lg text-slate-800">Checkout Step {checkoutStep}/3</h2>
+                            <button onClick={()=>{setIsCheckoutOpen(false); setCurrentTxHash(""); setIsProcessing(false);}} className="text-slate-500 hover:text-slate-800"><X size={20}/></button>
+                        </div>
                         <div className="p-6 overflow-y-auto flex-1">
                             {checkoutStep === 1 && (
                                 <div className="space-y-6">
@@ -320,7 +385,10 @@ export default function MallPage() {
                                     {currentTxHash && isProcessing && (
                                         <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-center">
                                             <p className="text-xs text-blue-600 mb-2">If you have paid but the screen is stuck:</p>
-                                            <button onClick={handleManualCheck} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 w-full flex items-center justify-center gap-2"><RefreshCw size={16}/> I have paid (Check Status)</button>
+                                            <div className="flex flex-col gap-2">
+                                                <button onClick={handleManualCheck} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 w-full flex items-center justify-center gap-2"><RefreshCw size={16}/> I have paid (Check Status)</button>
+                                                <button onClick={handleClearPending} className="text-red-400 text-xs hover:text-red-600 underline">Cancel / Reset</button>
+                                            </div>
                                         </div>
                                     )}
                                 </div>
