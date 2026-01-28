@@ -37,6 +37,9 @@ export default function MallPage() {
     const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
     const [cart, setCart] = useState<CartItem[]>([]);
     
+    // ✅ Animation State (เก็บ ID สินค้าที่กำลังถูกกด)
+    const [addingId, setAddingId] = useState<number | null>(null);
+
     // Checkout State
     const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
     const [checkoutStep, setCheckoutStep] = useState(1);
@@ -71,10 +74,17 @@ export default function MallPage() {
     useEffect(() => { if (isConnected && address) fetchUser(); else setCurrentUser(null); }, [isConnected, address]);
 
     // Actions
-    const addToCart = (product: Product) => setCart(prev => {
-        const exist = prev.find(p => p.id === product.id);
-        return exist ? prev.map(p => p.id === product.id ? { ...p, quantity: p.quantity + 1 } : p) : [...prev, { ...product, quantity: 1 }];
-    });
+    const addToCart = (product: Product) => {
+        // 1. เพิ่มสินค้าลงตะกร้า
+        setCart(prev => {
+            const exist = prev.find(p => p.id === product.id);
+            return exist ? prev.map(p => p.id === product.id ? { ...p, quantity: p.quantity + 1 } : p) : [...prev, { ...product, quantity: 1 }];
+        });
+
+        // 2. ✅ เล่น Animation (เปลี่ยนสถานะปุ่มชั่วคราว)
+        setAddingId(product.id);
+        setTimeout(() => setAddingId(null), 500); // กลับเป็นปกติหลัง 0.5 วินาที
+    };
 
     const removeFromCart = (productId: number) => {
         setCart(prev => prev.filter(p => p.id !== productId));
@@ -90,9 +100,8 @@ export default function MallPage() {
         }));
     };
 
-    // ✅ คำนวณราคา (เอาส่วนลดออก)
     const cartTotalTHB = cart.reduce((sum, item) => sum + (item.price_thb * item.quantity), 0);
-    const discountTHB = 0; // ❌ ปิดระบบส่วนลด (ตั้งเป็น 0)
+    const discountTHB = 0; 
     const finalPriceTHB = cartTotalTHB - discountTHB;
     const cryptoPrice = (finalPriceTHB / EXCHANGE_RATES[selectedToken]).toFixed(6);
 
@@ -162,6 +171,7 @@ export default function MallPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 font-sans pb-20 text-slate-900">
+            {/* Header */}
             <header className="bg-white border-b sticky top-0 z-10 px-6 py-4 flex justify-between items-center shadow-sm">
                 <div className="flex items-center gap-2">
                     <ShoppingBag className="text-orange-600" />
@@ -205,9 +215,24 @@ export default function MallPage() {
                                         <div className="text-orange-600 font-extrabold text-lg">฿{item.price_thb.toLocaleString()}</div>
                                         <div className="text-xs text-slate-400">≈ {(item.price_thb/EXCHANGE_RATES['USDT']).toFixed(2)} USDT</div>
                                     </div>
-                                    <button onClick={()=>addToCart(item)} className="w-full bg-slate-900 text-white py-2 rounded-xl font-bold hover:bg-slate-800 flex items-center justify-center gap-2 text-sm">
-                                        <Plus size={16}/> Add to Cart
+                                    
+                                    {/* ✅ ปุ่ม Add to Cart พร้อม Animation */}
+                                    <button 
+                                        onClick={()=>addToCart(item)} 
+                                        disabled={addingId === item.id}
+                                        className={`w-full py-2 rounded-xl font-bold flex items-center justify-center gap-2 text-sm transition-all duration-200 transform active:scale-95 ${
+                                            addingId === item.id 
+                                            ? "bg-green-500 text-white scale-105 shadow-lg shadow-green-200" 
+                                            : "bg-slate-900 text-white hover:bg-slate-800 hover:shadow-md"
+                                        }`}
+                                    >
+                                        {addingId === item.id ? (
+                                            <><CheckCircle size={16} className="animate-bounce"/> Added!</>
+                                        ) : (
+                                            <><Plus size={16}/> Add to Cart</>
+                                        )}
                                     </button>
+
                                 </div>
                             ))}
                         </div>
@@ -215,6 +240,7 @@ export default function MallPage() {
                 </div>
             </main>
 
+            {/* CHECKOUT MODAL */}
             {isCheckoutOpen && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm text-slate-900">
                     <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl flex flex-col max-h-[90vh]">
@@ -225,6 +251,7 @@ export default function MallPage() {
                         <div className="p-6 overflow-y-auto flex-1">
                             {checkoutStep === 1 && (
                                 <div className="space-y-6">
+                                    {/* Order Summary */}
                                     <div>
                                         <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><ShoppingBag size={18}/> Order Summary</h3>
                                         <div className="bg-slate-50 rounded-xl border p-2 space-y-2 max-h-48 overflow-y-auto">
@@ -251,12 +278,13 @@ export default function MallPage() {
                                         </div>
                                         {cart.length > 0 && (
                                             <div className="flex justify-between items-center mt-2 px-2">
-                                                <span className="text-xs font-bold text-slate-500">Total Amount</span>
+                                                <span className="text-xs font-bold text-slate-500">Subtotal</span>
                                                 <span className="text-sm font-extrabold text-slate-800">฿{cartTotalTHB.toLocaleString()}</span>
                                             </div>
                                         )}
                                     </div>
 
+                                    {/* Shipping Form */}
                                     <div className="border-t pt-4">
                                         <h3 className="font-bold text-slate-800 mb-3 flex items-center gap-2"><MapPin size={18}/> Shipping Details</h3>
                                         <div className="space-y-3">

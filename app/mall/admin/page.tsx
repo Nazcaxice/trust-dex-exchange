@@ -7,15 +7,11 @@ import {
     LayoutDashboard, Plus, List, Loader2, UploadCloud, 
     ArrowLeft, CheckCircle, Package, Trash2, Edit, X, Save,
     Users, Wallet, Lock, Key, LogIn, User, Shield, ShieldAlert,
-    Eye, MapPin, Phone, Calendar, CreditCard, ArrowRight, Printer, Copy, ExternalLink
+    Eye, MapPin, Phone, Calendar, CreditCard, ArrowRight, Printer, Copy, ExternalLink,
+    RefreshCw // ✅ Import ไอคอน Refresh
 } from 'lucide-react';
 
 const MERCHANT_WALLET = "0xA9b549c00E441A8043eDc267245ADF12533611b4";
-
-// ✅ ตั้งค่าเว็บสำหรับเช็ค Transaction (แก้ตาม Chain ที่ใช้)
-// ตัวอย่าง: BSC Testnet = "https://testnet.bscscan.com/tx/"
-// ตัวอย่าง: BSC Mainnet = "https://bscscan.com/tx/"
-// ตัวอย่าง: Ethereum = "https://etherscan.io/tx/"
 const BLOCK_EXPLORER = "https://sepolia.etherscan.io/tx/"; 
 
 export default function AdminPage() {
@@ -34,6 +30,7 @@ export default function AdminPage() {
     const [members, setMembers] = useState<any[]>([]);
     const [admins, setAdmins] = useState<any[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
+    const [isRefreshing, setIsRefreshing] = useState(false); // ✅ State สำหรับอนิเมชั่น Refresh
     
     // State View Detail
     const [selectedOrder, setSelectedOrder] = useState<any>(null);
@@ -54,6 +51,7 @@ export default function AdminPage() {
 
     // --- FETCH DATA ---
     const fetchData = async () => {
+        setIsRefreshing(true); // เริ่มหมุน
         const { data: orderData } = await supabase.from('orders').select('*').order('created_at', { ascending: false });
         setOrders(orderData || []);
         const { data: productData } = await supabase.from('products').select('*').order('id', { ascending: false });
@@ -64,6 +62,7 @@ export default function AdminPage() {
             const { data: adminData } = await supabase.from('admins').select('*').order('id', { ascending: true });
             setAdmins(adminData || []);
         }
+        setTimeout(() => setIsRefreshing(false), 500); // หยุดหมุน
     };
     useEffect(() => { if (isAuthenticated) fetchData(); }, [isAuthenticated, currentAdmin]);
 
@@ -233,7 +232,6 @@ export default function AdminPage() {
                                     </div>
                                 </div>
                                 
-                                {/* ✅ ส่วนแสดง Tx Hash */}
                                 <div className="border-t border-purple-200/50 pt-2 mt-2">
                                     <div className="text-xs text-slate-500 mb-1">Tx Hash:</div>
                                     <div className="flex items-center gap-2">
@@ -310,20 +308,54 @@ export default function AdminPage() {
 
                 {/* CONTENT AREA */}
                 <div className="lg:col-span-3 space-y-6">
+                    {/* ✅ เพิ่มปุ่ม Refresh ไว้ที่ Header ของทุกตาราง */}
+                    
                     {activeTab === 'PRODUCTS' && (
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border"><h2 className="text-lg font-bold mb-4 flex items-center gap-2 border-b pb-2"><Package size={20}/> Product List</h2><div className="overflow-x-auto"><table className="w-full text-sm text-left text-slate-700"><thead className="bg-slate-50 text-slate-500"><tr><th className="p-3">Img</th><th className="p-3">Name</th><th className="p-3">Price</th><th className="p-3 text-right">Action</th></tr></thead><tbody className="divide-y">{products.map((p) => (<tr key={p.id} className="hover:bg-slate-50"><td className="p-3"><img src={p.image_url} className="w-8 h-8 rounded bg-slate-100 object-cover"/></td><td className="p-3 font-bold">{p.name}</td><td className="p-3">฿{p.price_thb.toLocaleString()}</td><td className="p-3 text-right"><button onClick={() => handleEditProduct(p)} className="text-blue-600 mx-2"><Edit size={16}/></button><button onClick={() => handleDeleteProduct(p.id)} className="text-red-600"><Trash2 size={16}/></button></td></tr>))}</tbody></table></div></div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border">
+                            <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                <h2 className="text-lg font-bold flex items-center gap-2"><Package size={20}/> Product List</h2>
+                                <button onClick={fetchData} disabled={isRefreshing} className="text-sm font-bold text-slate-500 hover:text-blue-600 flex items-center gap-1 transition-colors disabled:opacity-50">
+                                    <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""}/> Refresh
+                                </button>
+                            </div>
+                            <div className="overflow-x-auto"><table className="w-full text-sm text-left text-slate-700"><thead className="bg-slate-50 text-slate-500"><tr><th className="p-3">Img</th><th className="p-3">Name</th><th className="p-3">Price</th><th className="p-3 text-right">Action</th></tr></thead><tbody className="divide-y">{products.map((p) => (<tr key={p.id} className="hover:bg-slate-50"><td className="p-3"><img src={p.image_url} className="w-8 h-8 rounded bg-slate-100 object-cover"/></td><td className="p-3 font-bold">{p.name}</td><td className="p-3">฿{p.price_thb.toLocaleString()}</td><td className="p-3 text-right"><button onClick={() => handleEditProduct(p)} className="text-blue-600 mx-2"><Edit size={16}/></button><button onClick={() => handleDeleteProduct(p.id)} className="text-red-600"><Trash2 size={16}/></button></td></tr>))}</tbody></table></div>
+                        </div>
                     )}
                     
                     {activeTab === 'ORDERS' && (
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border"><h2 className="text-lg font-bold mb-4 flex items-center gap-2 border-b pb-2"><List size={20}/> Order History</h2><div className="overflow-x-auto"><table className="w-full text-sm text-left text-slate-700"><thead className="bg-slate-50 text-slate-500"><tr><th className="p-3">ID</th><th className="p-3">Customer</th><th className="p-3">Amount</th><th className="p-3">Status</th><th className="p-3 text-right">Action</th></tr></thead><tbody className="divide-y">{orders.map((order) => (<tr key={order.id} className="hover:bg-slate-50"><td className="p-3 font-mono text-xs text-slate-500">#{order.id}</td><td className="p-3"><div className="font-bold text-xs truncate w-32">{order.buyer_wallet}</div></td><td className="p-3 font-bold">฿{order.final_price_thb.toLocaleString()}</td><td className="p-3"><span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">{order.status}</span></td><td className="p-3 text-right"><button onClick={() => setSelectedOrder(order)} className="text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-100 flex items-center gap-1 ml-auto"><Eye size={14}/> View</button></td></tr>))}</tbody></table></div></div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border">
+                            <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                <h2 className="text-lg font-bold flex items-center gap-2"><List size={20}/> Order History</h2>
+                                <button onClick={fetchData} disabled={isRefreshing} className="text-sm font-bold text-slate-500 hover:text-blue-600 flex items-center gap-1 transition-colors disabled:opacity-50">
+                                    <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""}/> Refresh
+                                </button>
+                            </div>
+                            <div className="overflow-x-auto"><table className="w-full text-sm text-left text-slate-700"><thead className="bg-slate-50 text-slate-500"><tr><th className="p-3">ID</th><th className="p-3">Customer</th><th className="p-3">Amount</th><th className="p-3">Status</th><th className="p-3 text-right">Action</th></tr></thead><tbody className="divide-y">{orders.map((order) => (<tr key={order.id} className="hover:bg-slate-50"><td className="p-3 font-mono text-xs text-slate-500">#{order.id}</td><td className="p-3"><div className="font-bold text-xs truncate w-32">{order.buyer_wallet}</div></td><td className="p-3 font-bold">฿{order.final_price_thb.toLocaleString()}</td><td className="p-3"><span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">{order.status}</span></td><td className="p-3 text-right"><button onClick={() => setSelectedOrder(order)} className="text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-100 flex items-center gap-1 ml-auto"><Eye size={14}/> View</button></td></tr>))}</tbody></table></div>
+                        </div>
                     )}
 
                     {activeTab === 'MEMBERS' && (
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border"><h2 className="text-lg font-bold mb-4 flex items-center gap-2 border-b pb-2"><Users size={20}/> Members</h2><div className="overflow-x-auto"><table className="w-full text-sm text-left text-slate-700"><thead className="bg-slate-50 text-slate-500"><tr><th className="p-3">Wallet</th><th className="p-3">Name</th><th className="p-3">Points & Tier</th><th className="p-3 text-right">Action</th></tr></thead><tbody className="divide-y">{members.map((member) => (<tr key={member.wallet_address} className="hover:bg-slate-50"><td className="p-3 font-mono text-xs font-bold text-slate-600">{member.wallet_address.slice(0,6)}...</td><td className="p-3 font-bold">{member.name}</td><td className="p-3"><span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded text-xs mr-2">{member.tier}</span>{member.points} pts</td><td className="p-3 text-right"><button onClick={() => handleEditPoints(member)} className="text-blue-600 font-bold text-xs border border-blue-200 px-2 py-1 rounded">Edit</button></td></tr>))}</tbody></table></div></div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border">
+                            <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                <h2 className="text-lg font-bold flex items-center gap-2"><Users size={20}/> Members</h2>
+                                <button onClick={fetchData} disabled={isRefreshing} className="text-sm font-bold text-slate-500 hover:text-blue-600 flex items-center gap-1 transition-colors disabled:opacity-50">
+                                    <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""}/> Refresh
+                                </button>
+                            </div>
+                            <div className="overflow-x-auto"><table className="w-full text-sm text-left text-slate-700"><thead className="bg-slate-50 text-slate-500"><tr><th className="p-3">Wallet</th><th className="p-3">Name</th><th className="p-3">Points & Tier</th><th className="p-3 text-right">Action</th></tr></thead><tbody className="divide-y">{members.map((member) => (<tr key={member.wallet_address} className="hover:bg-slate-50"><td className="p-3 font-mono text-xs font-bold text-slate-600">{member.wallet_address.slice(0,6)}...</td><td className="p-3 font-bold">{member.name}</td><td className="p-3"><span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded text-xs mr-2">{member.tier}</span>{member.points} pts</td><td className="p-3 text-right"><button onClick={() => handleEditPoints(member)} className="text-blue-600 font-bold text-xs border border-blue-200 px-2 py-1 rounded">Edit</button></td></tr>))}</tbody></table></div>
+                        </div>
                     )}
                     
                     {activeTab === 'ADMINS' && (
-                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-purple-200"><h2 className="text-lg font-bold mb-4 flex items-center gap-2 border-b pb-2 text-purple-800"><Shield size={20}/> Manage Admin Team</h2><div className="overflow-x-auto"><table className="w-full text-sm text-left text-slate-700"><thead className="bg-slate-50 text-slate-500"><tr><th className="p-3">ID</th><th className="p-3">Username</th><th className="p-3">Role</th><th className="p-3 text-right">Actions</th></tr></thead><tbody className="divide-y">{admins.map((admin) => (<tr key={admin.id} className={`hover:bg-slate-50 ${admin.id === currentAdmin.id ? 'bg-purple-50' : ''}`}><td className="p-3 text-xs text-slate-500">#{admin.id}</td><td className="p-3 font-bold flex items-center gap-2">{admin.username}{admin.id === currentAdmin.id && <span className="bg-purple-200 text-purple-800 text-[10px] px-1.5 rounded">YOU</span>}</td><td className="p-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${admin.role === 'super_admin' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{admin.role === 'super_admin' ? 'Super Admin' : 'Admin'}</span></td><td className="p-3 text-right"><button onClick={() => handleEditAdmin(admin)} className="text-blue-600 mx-2 hover:bg-blue-100 p-1 rounded"><Edit size={16}/></button><button onClick={() => handleDeleteAdmin(admin.id)} className="text-red-600 hover:bg-red-100 p-1 rounded disabled:opacity-30" disabled={admin.id === currentAdmin.id}><Trash2 size={16}/></button></td></tr>))}</tbody></table></div></div>
+                        <div className="bg-white p-6 rounded-2xl shadow-sm border border-purple-200">
+                            <div className="flex justify-between items-center mb-4 border-b pb-2">
+                                <h2 className="text-lg font-bold flex items-center gap-2 text-purple-800"><Shield size={20}/> Manage Admin Team</h2>
+                                <button onClick={fetchData} disabled={isRefreshing} className="text-sm font-bold text-slate-500 hover:text-purple-600 flex items-center gap-1 transition-colors disabled:opacity-50">
+                                    <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""}/> Refresh
+                                </button>
+                            </div>
+                            <div className="overflow-x-auto"><table className="w-full text-sm text-left text-slate-700"><thead className="bg-slate-50 text-slate-500"><tr><th className="p-3">ID</th><th className="p-3">Username</th><th className="p-3">Role</th><th className="p-3 text-right">Actions</th></tr></thead><tbody className="divide-y">{admins.map((admin) => (<tr key={admin.id} className={`hover:bg-slate-50 ${admin.id === currentAdmin.id ? 'bg-purple-50' : ''}`}><td className="p-3 text-xs text-slate-500">#{admin.id}</td><td className="p-3 font-bold flex items-center gap-2">{admin.username}{admin.id === currentAdmin.id && <span className="bg-purple-200 text-purple-800 text-[10px] px-1.5 rounded">YOU</span>}</td><td className="p-3"><span className={`px-2 py-1 rounded-full text-xs font-bold ${admin.role === 'super_admin' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>{admin.role === 'super_admin' ? 'Super Admin' : 'Admin'}</span></td><td className="p-3 text-right"><button onClick={() => handleEditAdmin(admin)} className="text-blue-600 mx-2 hover:bg-blue-100 p-1 rounded"><Edit size={16}/></button><button onClick={() => handleDeleteAdmin(admin.id)} className="text-red-600 hover:bg-red-100 p-1 rounded disabled:opacity-30" disabled={admin.id === currentAdmin.id}><Trash2 size={16}/></button></td></tr>))}</tbody></table></div>
+                        </div>
                     )}
                 </div>
             </main>
