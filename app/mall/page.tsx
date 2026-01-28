@@ -17,7 +17,7 @@ import {
 // CONFIGURATION
 // ==========================================
 const MERCHANT_WALLET = "0xA9b549c00E441A8043eDc267245ADF12533611b4";
-const BLOCK_EXPLORER = "https://testnet.bscscan.com/tx/"; 
+const BLOCK_EXPLORER = "https://sepolia.etherscan.io/tx/"; 
 const EXCHANGE_RATES: Record<string, number> = { "THB": 1, "USDT": 34.5, "ADS": 10.0, "ETH": 85000 };
 const TOKENS: Record<string, { address: string; decimals: number }> = {
     "USDT": { address: "0xaA8E23Fb1079EA71e0a56F48a2aA51851D8433D0", decimals: 6 },
