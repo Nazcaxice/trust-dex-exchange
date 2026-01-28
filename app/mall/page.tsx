@@ -439,10 +439,7 @@ export default function MallPage() {
                                     {currentTxHash && isProcessing && (
                                         <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-center">
                                             <p className="text-xs text-blue-600 mb-2 flex items-center justify-center gap-1"><AlertTriangle size={12}/> If paid but stuck, click below:</p>
-                                            <div className="flex flex-col gap-2">
-                                                <button onClick={handleManualCheck} className="bg-blue-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-blue-700 w-full flex items-center justify-center gap-2"><RefreshCw size={16}/> Check Status (Force)</button>
-                                                <button onClick={handleClearPending} className="text-red-400 text-xs hover:text-red-600 underline">Cancel / Reset</button>
-                                            </div>
+                                             
                                         </div>
                                     )}
                                 </div>
