@@ -62,7 +62,7 @@ export default function MallPage() {
     const [statusMessage, setStatusMessage] = useState("");
     const [currentTxHash, setCurrentTxHash] = useState("");
 
-    // ✅ Effect: ตรวจสอบว่ามี Transaction ค้างอยู่หรือไม่ (แก้ปัญหา Mobile Refresh)
+    // ✅ Effect: ตรวจสอบว่ามี Transaction ค้างอยู่หรือไม่
     useEffect(() => {
         const pendingHash = localStorage.getItem('pendingTxHash');
         const pendingCart = localStorage.getItem('pendingCart');
@@ -163,7 +163,7 @@ export default function MallPage() {
             if (error) throw error;
             if (address) { await supabase.from('users').update({ points: newPoints, tier: newTier, phone: shippingInfo.phone, shipping_address: shippingInfo.address }).eq('wallet_address', address); fetchUser(); }
 
-            // ✅ Clear Storage เมื่อสำเร็จ
+            // Clear Storage
             localStorage.removeItem('pendingTxHash');
             localStorage.removeItem('pendingCart');
 
@@ -175,9 +175,9 @@ export default function MallPage() {
         }
     };
 
-    // ✅ Manual Check (Updated Logic)
+    // ✅ Manual Check (Updated)
     const handleManualCheck = async () => {
-        // ดึง Hash จาก State หรือ LocalStorage
+        // ดึงจาก State หรือ LocalStorage
         const hashToCheck = currentTxHash || localStorage.getItem('pendingTxHash');
 
         if (!hashToCheck) { 
@@ -185,12 +185,15 @@ export default function MallPage() {
             setIsProcessing(false);
             return; 
         }
+        
+        // อัปเดต state ให้เห็นใน input ด้วย
+        setCurrentTxHash(hashToCheck);
+
         if (!publicClient) return;
         
         setStatusMessage("Checking transaction status on blockchain... ⏳");
         
         try {
-            // รอตรวจสอบ (เพิ่ม Timeout 15 วินาที)
             const receipt = await publicClient.waitForTransactionReceipt({ 
                 hash: hashToCheck as `0x${string}`, 
                 timeout: 15_000 
@@ -202,11 +205,10 @@ export default function MallPage() {
                 alert("Transaction Failed/Reverted on Blockchain."); 
                 setStatusMessage("Transaction failed."); 
                 setIsProcessing(false);
-                localStorage.removeItem('pendingTxHash'); // ลบออกถ้าล้มเหลว
+                localStorage.removeItem('pendingTxHash'); 
             }
         } catch (error) {
             console.error(error);
-            // กรณีรอนานเกินไป หรือยังไม่ Sync
             alert("Transaction not found YET or Network is slow.\nPlease wait ~10 seconds and click 'Check Status' again.");
             setStatusMessage("Network slow. Please click 'Check Status' again.");
         }
@@ -219,7 +221,6 @@ export default function MallPage() {
         setIsProcessing(true);
         setStatusMessage("Please confirm transaction in your wallet...");
         
-        // Clear old pending
         setCurrentTxHash(""); 
         localStorage.removeItem('pendingTxHash');
 
@@ -235,7 +236,7 @@ export default function MallPage() {
             }
 
             if (txHash) {
-                // ✅ บันทึก Hash ลงเครื่องทันที กันหน้าจอดับ/รีเฟรช
+                // บันทึก Hash ทันที
                 localStorage.setItem('pendingTxHash', txHash);
                 localStorage.setItem('pendingCart', JSON.stringify(cart));
                 setCurrentTxHash(txHash);
@@ -243,7 +244,6 @@ export default function MallPage() {
                 setStatusMessage("Waiting for transaction confirmation... ⏳");
                 
                 if (publicClient) {
-                    // ลองรอแบบ Auto ดูก่อน
                     try {
                         await publicClient.waitForTransactionReceipt({ hash: txHash as `0x${string}` });
                         await saveOrderToDb(txHash);
@@ -258,7 +258,6 @@ export default function MallPage() {
         } 
     };
 
-    // ปุ่ม Reset สำหรับกรณีค้าง
     const handleClearPending = () => {
         if(confirm("Are you sure you want to cancel checking this transaction?")) {
             localStorage.removeItem('pendingTxHash');
@@ -381,6 +380,19 @@ export default function MallPage() {
                                     <div className="grid grid-cols-3 gap-2">{Object.keys(TOKENS).map(token => (<button key={token} onClick={()=>setSelectedToken(token)} className={`py-3 rounded-xl border font-bold text-sm ${selectedToken===token ? 'bg-slate-900 text-white' : 'bg-white text-slate-600'}`}>{token}</button>))}</div>
                                     <div className="bg-orange-50 p-4 rounded-xl text-center"><div className="text-sm text-orange-800">You Pay</div><div className="text-2xl font-extrabold text-slate-900">{cryptoPrice} {selectedToken}</div></div>
                                     
+                                    {/* ✅ แสดง Tx Hash ใน Input Box */}
+                                    {currentTxHash && (
+                                        <div className="mt-3">
+                                            <label className="text-xs text-slate-400 block text-left mb-1">Transaction Hash (Debug):</label>
+                                            <input 
+                                                type="text" 
+                                                value={currentTxHash} 
+                                                readOnly 
+                                                className="w-full p-2 text-xs border rounded-lg bg-slate-100 text-slate-600 font-mono focus:outline-none"
+                                            />
+                                        </div>
+                                    )}
+
                                     {/* Manual Check Button */}
                                     {currentTxHash && isProcessing && (
                                         <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-center">
