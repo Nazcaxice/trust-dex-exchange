@@ -438,7 +438,7 @@ export default function MallPage() {
                                     {/* Manual Check Button */}
                                     {currentTxHash && isProcessing && (
                                         <div className="mt-4 p-4 bg-blue-50 border border-blue-100 rounded-xl text-center">
-                                            <p className="text-xs text-blue-600 mb-2 flex items-center justify-center gap-1"><AlertTriangle size={12}/> If paid but stuck, click below:</p>
+                                            <p className="text-xs text-blue-600 mb-2 flex items-center justify-center gap-1"><AlertTriangle size={12}/> Please wait until the transaction is complete.</p>
                                              
                                         </div>
                                     )}
