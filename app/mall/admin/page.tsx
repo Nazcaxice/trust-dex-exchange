@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 const MERCHANT_WALLET = "0xA9b549c00E441A8043eDc267245ADF12533611b4";
-const BLOCK_EXPLORER = "https://sepolia.etherscan.io/tx/"; 
+const BLOCK_EXPLORER = "https://testnet.bscscan.com/tx/"; 
 
 export default function AdminPage() {
     // --- AUTH STATE ---

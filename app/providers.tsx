@@ -9,13 +9,8 @@ import {
 } from '@rainbow-me/rainbowkit';
 import { WagmiProvider } from 'wagmi';
 import {
-  mainnet,
-  polygon,
-  optimism,
-  arbitrum,
-  base,
-  sepolia, // <--- 1. เพิ่มการ import ตรงนี้
-  bscTestnet,// <--- 2. เพิ่มการ import ตรงนี้
+  bsc,        // ✅ เพิ่ม BSC Mainnet (Chain ID 56)
+  bscTestnet, // ✅ เพิ่ม BSC Testnet (Chain ID 97)
 } from 'wagmi/chains';
 import {
   QueryClientProvider,
@@ -25,8 +20,8 @@ import {
 const config = getDefaultConfig({
   appName: 'TrustDEX Pro',
   projectId: '4276f1754fa1cba468df7b87adb48b35', 
-  // 2. เพิ่ม sepolia เข้าไปในรายการ chains (เอาไว้หน้าสุดเพื่อให้เป็น default)
-  chains: [bscTestnet,sepolia, mainnet, polygon, optimism, arbitrum, base],
+  // ✅ กำหนดให้เหลือแค่ BSC Testnet และ BSC Mainnet เท่านั้น
+  chains: [bsc,bscTestnet], 
   ssr: true,
 });
 
@@ -37,10 +32,12 @@ export function Providers({ children }: { children: React.ReactNode }) {
     <WagmiProvider config={config}>
       <QueryClientProvider client={queryClient}>
         <RainbowKitProvider 
-            initialChain={sepolia} // 3. บังคับให้เริ่มที่ Sepolia
+            // ✅ บังคับให้เริ่มที่ BSC Testnet (เพื่อให้ตรงกับค่าใน page.tsx ที่คุณตั้งเป็น 97)
+            // หากต้องการใช้ Mainnet ให้เปลี่ยนเป็น initialChain={bsc}
+            initialChain={bsc} 
             theme={darkTheme({
-                accentColor: '#2563eb',
-                accentColorForeground: 'white',
+                accentColor: '#facc15', // เปลี่ยนสี Theme ให้เข้ากับ BNB (สีเหลือง)
+                accentColorForeground: 'black',
                 borderRadius: 'medium',
             })}
         >
