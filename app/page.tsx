@@ -884,10 +884,19 @@ const PoolsSection = () => {
 
 // --- MAIN APP ---
 export default function CryptoExchange() {
-  const [activeMenu, setActiveMenu] = useState('Swap');
+ const [activeMenu, setActiveMenu] = useState('Swap');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const renderContent = () => {
+  // ✅ รวมเมนูทั้งหมดไว้ที่นี่ (Shopping Mall + เมนูอื่นๆ)
+  const navItems = [
+    { name: 'Swap', type: 'button' },
+    { name: 'Marketplace', type: 'button' },
+    { name: 'Staking', type: 'button' },
+    { name: 'Pools Liquidity', type: 'button' },
+     { name: 'Shopping Mall', type: 'link', href: '/mall' }, // ลิงก์แยก
+  ];
+
+   const renderContent = () => {
     switch (activeMenu) {
       case 'Swap': return <SwapSection />;
       case 'Marketplace': return <MarketplaceSection />;
@@ -901,18 +910,39 @@ export default function CryptoExchange() {
     <div className="min-h-screen bg-[#f8fafc] font-sans text-slate-900">
       <header className="bg-[#0f172a] text-white border-b border-slate-800 sticky top-0 z-50 shadow-md">
         <div className="container mx-auto px-4 h-16 flex justify-between items-center">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={()=>setActiveMenu('Swap')}>
+          
+          {/* Logo */}
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveMenu('Swap')}>
             <img src="img/logo200.png" alt="Logo" className="w-10 h-10 object-contain" />
             <span className="text-xl font-bold tracking-tight">Onenarai <span className="text-blue-400">DEX</span></span>
           </div>
+
+          {/* ✅ Desktop Menu (แสดงผลจอใหญ่) */}
           <nav className="hidden md:flex gap-1 text-sm font-medium text-slate-400">
-            <Link href="/mall" className="px-4 py-2 rounded-lg hover:text-white transition-all">
-                Shopping Mall
-            </Link>
-            {['Swap', 'Marketplace', 'Staking', 'Pools Liquidity'].map((item) => (
-              <button key={item} onClick={() => setActiveMenu(item)} className={`px-4 py-2 rounded-lg transition-all ${activeMenu === item ? 'bg-slate-800 text-white' : 'hover:text-white'}`}>{item}</button>
+            {navItems.map((item) => (
+              item.type === 'link' ? (
+                // กรณีเป็น Link (Shopping Mall)
+                <Link 
+                    key={item.name} 
+                    href={item.href || '#'} 
+                    className="px-4 py-2 rounded-lg hover:text-white transition-all flex items-center"
+                >
+                   {item.name}
+                </Link>
+              ) : (
+                // กรณีเป็น Button เปลี่ยนหน้า (Swap, Staking, etc.)
+                <button 
+                  key={item.name} 
+                  onClick={() => setActiveMenu(item.name)} 
+                  className={`px-4 py-2 rounded-lg transition-all ${activeMenu === item.name ? 'bg-slate-800 text-white' : 'hover:text-white'}`}
+                >
+                  {item.name}
+                </button>
+              )
             ))}
           </nav>
+
+          {/* Wallet & Mobile Toggle */}
           <div className="flex items-center gap-4">
               <ConnectButton showBalance={false} chainStatus="icon" accountStatus="avatar" />
               <button className="md:hidden p-2" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
@@ -920,10 +950,30 @@ export default function CryptoExchange() {
               </button>
           </div>
         </div>
+
+        {/* ✅ Mobile Menu (แสดงผลมือถือ) */}
         {isMobileMenuOpen && (
-            <div className="md:hidden bg-[#0f172a] border-b border-slate-800 p-4 absolute w-full">
-                {['Swap', 'Marketplace', 'Staking', 'Pools Liquidity'].map((item) => (
-                    <button key={item} onClick={() => { setActiveMenu(item); setIsMobileMenuOpen(false); }} className="block w-full text-left p-3 text-slate-300 hover:text-white font-bold">{item}</button>
+            <div className="md:hidden bg-[#0f172a] border-b border-slate-800 p-4 absolute w-full z-50 shadow-xl">
+                {navItems.map((item) => (
+                    item.type === 'link' ? (
+                        // Mobile Link
+                        <Link 
+                            key={item.name} 
+                            href={item.href || '#'} 
+                            className="block w-full text-left p-3 text-slate-300 hover:text-white font-bold hover:bg-slate-800 rounded-lg transition-colors"
+                        >
+                            {item.name}
+                        </Link>
+                    ) : (
+                        // Mobile Button
+                        <button 
+                            key={item.name} 
+                            onClick={() => { setActiveMenu(item.name); setIsMobileMenuOpen(false); }} 
+                            className={`block w-full text-left p-3 font-bold rounded-lg transition-colors ${activeMenu === item.name ? 'text-white bg-slate-800' : 'text-slate-300 hover:text-white hover:bg-slate-800'}`}
+                        >
+                            {item.name}
+                        </button>
+                    )
                 ))}
             </div>
         )}
@@ -931,4 +981,5 @@ export default function CryptoExchange() {
       <main className="container mx-auto px-4 py-8">{renderContent()}</main>
     </div>
   );
+
 }
