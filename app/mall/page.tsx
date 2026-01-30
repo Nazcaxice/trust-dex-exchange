@@ -345,8 +345,20 @@ export default function MallPage() {
                             <div className="max-w-3xl mx-auto">
                                 <div className="flex items-center gap-4 mb-6">
                                     <button onClick={() => setSelectedOrder(null)} className="p-2 bg-white border rounded-full hover:bg-slate-50 transition-colors shadow-sm text-slate-500 hover:text-slate-800"><ArrowLeft size={20} /></button>
-                                    <div><h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">Order #{selectedOrder.id}<span className={`px-3 py-1 rounded-full text-sm font-bold ${selectedOrder.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{selectedOrder.status}</span></h1><div className="text-sm text-slate-500 flex items-center gap-2 mt-1"><Clock size={14}/> {new Date(selectedOrder.created_at).toLocaleString()}</div></div>
+                                    <div>
+                                        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                                            Order #{selectedOrder.id}
+                                            <span className={`px-3 py-1 rounded-full text-sm font-bold ${selectedOrder.status === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>{selectedOrder.status}</span>
+                                        </h1>
+                                        
+                                        {/* ✅ จุดที่ 1: เพิ่มแสดงวันที่ในหน้ารายละเอียด */}
+                                        <div className="text-sm text-slate-500 flex items-center gap-2 mt-1">
+                                            <Clock size={14}/> 
+                                            {new Date(selectedOrder.created_at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}
+                                        </div>
+                                    </div>
                                 </div>
+                                
                                 <div className="space-y-6">
                                     <div className="bg-white p-6 rounded-2xl border shadow-sm space-y-4">
                                         <h3 className="font-bold text-slate-800 flex items-center gap-2 border-b pb-2"><List size={20} className="text-orange-500"/> Order Items</h3>
@@ -377,8 +389,14 @@ export default function MallPage() {
                                                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4 mb-4">
                                                     <div>
                                                         <div className="font-bold text-lg text-slate-800 flex items-center gap-2">Order #{order.id}<span className="bg-green-100 text-green-700 px-2 py-0.5 rounded text-xs font-bold border border-green-200">{order.status}</span></div>
-                                                        <div className="text-xs text-slate-500 flex items-center gap-1 mt-1"><Clock size={12}/> {new Date(order.created_at).toLocaleString()}</div>
+                                                        
+                                                        {/* ✅ จุดที่ 2: เพิ่มแสดงวันที่ในหน้ารายการรวม */}
+                                                        <div className="text-xs text-slate-500 flex items-center gap-1 mt-1">
+                                                            <Clock size={12}/> 
+                                                            {new Date(order.created_at).toLocaleString('th-TH', { dateStyle: 'medium', timeStyle: 'short' })}
+                                                        </div>
                                                     </div>
+                                                    
                                                     <div className="flex items-center gap-4 w-full md:w-auto justify-between md:justify-end">
                                                         <div className="text-right"><div className="text-xs text-slate-400">Total Amount</div><div className="font-extrabold text-slate-900 text-lg">฿{order.final_price_thb.toLocaleString()}</div></div>
                                                         <div className="flex gap-2">

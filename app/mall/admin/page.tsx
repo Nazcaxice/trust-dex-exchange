@@ -322,7 +322,7 @@ export default function AdminPage() {
                         </div>
                     )}
                     
-                    {activeTab === 'ORDERS' && (
+                   {activeTab === 'ORDERS' && (
                         <div className="bg-white p-6 rounded-2xl shadow-sm border">
                             <div className="flex justify-between items-center mb-4 border-b pb-2">
                                 <h2 className="text-lg font-bold flex items-center gap-2"><List size={20}/> Order History</h2>
@@ -330,7 +330,45 @@ export default function AdminPage() {
                                     <RefreshCw size={16} className={isRefreshing ? "animate-spin" : ""}/> Refresh
                                 </button>
                             </div>
-                            <div className="overflow-x-auto"><table className="w-full text-sm text-left text-slate-700"><thead className="bg-slate-50 text-slate-500"><tr><th className="p-3">ID</th><th className="p-3">Customer</th><th className="p-3">Amount</th><th className="p-3">Status</th><th className="p-3 text-right">Action</th></tr></thead><tbody className="divide-y">{orders.map((order) => (<tr key={order.id} className="hover:bg-slate-50"><td className="p-3 font-mono text-xs text-slate-500">#{order.id}</td><td className="p-3"><div className="font-bold text-xs truncate w-32">{order.buyer_wallet}</div></td><td className="p-3 font-bold">฿{order.final_price_thb.toLocaleString()}</td><td className="p-3"><span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">{order.status}</span></td><td className="p-3 text-right"><button onClick={() => setSelectedOrder(order)} className="text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-100 flex items-center gap-1 ml-auto"><Eye size={14}/> View</button></td></tr>))}</tbody></table></div>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left text-slate-700">
+                                    <thead className="bg-slate-50 text-slate-500">
+                                        <tr>
+                                            <th className="p-3">ID</th>
+                                            {/* ✅ เพิ่มหัวตาราง Date */}
+                                            <th className="p-3">Date</th>
+                                            <th className="p-3">Customer</th>
+                                            <th className="p-3">Amount</th>
+                                            <th className="p-3">Status</th>
+                                            <th className="p-3 text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y">
+                                        {orders.map((order) => (
+                                            <tr key={order.id} className="hover:bg-slate-50">
+                                                <td className="p-3 font-mono text-xs text-slate-500">#{order.id}</td>
+                                                
+                                                {/* ✅ เพิ่มส่วนแสดงผลวันที่ created_at */}
+                                                <td className="p-3 text-xs text-slate-600">
+                                                    {new Date(order.created_at).toLocaleString('th-TH', { 
+                                                        dateStyle: 'short', 
+                                                        timeStyle: 'short' 
+                                                    })}
+                                                </td>
+
+                                                <td className="p-3"><div className="font-bold text-xs truncate w-32">{order.buyer_wallet}</div></td>
+                                                <td className="p-3 font-bold">฿{order.final_price_thb.toLocaleString()}</td>
+                                                <td className="p-3"><span className="bg-green-100 text-green-700 px-2 py-1 rounded-full text-xs font-bold">{order.status}</span></td>
+                                                <td className="p-3 text-right">
+                                                    <button onClick={() => setSelectedOrder(order)} className="text-blue-600 bg-blue-50 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-100 flex items-center gap-1 ml-auto">
+                                                        <Eye size={14}/> View
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
                     )}
 
