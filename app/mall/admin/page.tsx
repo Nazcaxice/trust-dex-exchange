@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 
 const MERCHANT_WALLET = "0xA9b549c00E441A8043eDc267245ADF12533611b4";
-const BLOCK_EXPLORER = "https://testnet.bscscan.com/tx/"; 
+const BLOCK_EXPLORER = "https://bscscan.com/tx/"; 
 
 export default function AdminPage() {
     // --- AUTH STATE ---
@@ -223,10 +223,10 @@ export default function AdminPage() {
                                 <div className="flex justify-between text-sm items-center">
                                     <span className="text-slate-500 flex items-center gap-1">To Merchant <ArrowRight size={12}/></span>
                                     <div className="flex items-center gap-2">
-                                        <span className="font-mono text-xs bg-white px-2 py-1 rounded border text-slate-600" title={MERCHANT_WALLET}>
-                                            {MERCHANT_WALLET.slice(0,6)}...{MERCHANT_WALLET.slice(-4)}
+                                        <span className="font-mono text-xs bg-white px-2 py-1 rounded border text-slate-600" title={selectedOrder.merchant_wallet}>
+                                            {selectedOrder.merchant_wallet.slice(0,6)}...{selectedOrder.merchant_wallet.slice(-4)}
                                         </span>
-                                        <button onClick={() => handleCopy(MERCHANT_WALLET, 'merchant')} className="text-slate-400 hover:text-slate-800 transition-colors" title="Copy Merchant Address">
+                                        <button onClick={() => handleCopy(selectedOrder.merchant_wallet, 'merchant')} className="text-slate-400 hover:text-slate-800 transition-colors" title="Copy Merchant Address">
                                             {copiedField === 'merchant' ? <CheckCircle size={14} className="text-green-600"/> : <Copy size={14}/>}
                                         </button>
                                     </div>

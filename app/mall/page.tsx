@@ -162,8 +162,16 @@ export default function MallPage() {
             let newTier = newPoints > 5000 ? 'Platinum' : newPoints > 1000 ? 'Gold' : 'Silver';
 
             const { error } = await supabase.from('orders').insert([{
-                buyer_wallet: address, items: cart, total_thb: cartTotalTHB, discount_thb: discountTHB, final_price_thb: finalPriceTHB,
-                payment_token: selectedToken, crypto_amount: parseFloat(cryptoPrice), shipping_info: shippingInfo, status: 'PAID',
+                buyer_wallet: address, 
+                merchant_wallet: MERCHANT_WALLET, // ✅ เพิ่มบรรทัดนี้: บันทึกกระเป๋าผู้รับเงิน
+                items: cart, 
+                total_thb: cartTotalTHB, 
+                discount_thb: discountTHB, 
+                final_price_thb: finalPriceTHB,
+                payment_token: selectedToken, 
+                crypto_amount: parseFloat(cryptoPrice), 
+                shipping_info: shippingInfo, 
+                status: 'PAID',
                 tx_hash: txHash
             }]);
             
@@ -372,7 +380,7 @@ export default function MallPage() {
                                             <div className="text-sm space-y-3">
                                                 <div className="flex justify-between items-center bg-slate-50 p-2 rounded border"><span className="text-slate-500">Paid Amount</span><span className="font-mono font-bold text-purple-700">{selectedOrder.crypto_amount} {selectedOrder.payment_token}</span></div>
                                                 <div><span className="text-xs text-slate-400 block mb-1">From (Buyer)</span><div className="flex items-center gap-2"><div className="font-mono text-xs bg-slate-100 p-2 rounded border text-slate-600 truncate flex-1">{selectedOrder.buyer_wallet}</div><button onClick={() => handleCopy(selectedOrder.buyer_wallet, 'buyer')} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-800">{copiedField === 'buyer' ? <CheckCircle size={14} className="text-green-500"/> : <Copy size={14}/>}</button></div></div>
-                                                <div><span className="text-xs text-slate-400 block mb-1">To (Merchant)</span><div className="flex items-center gap-2"><div className="font-mono text-xs bg-slate-100 p-2 rounded border text-slate-600 truncate flex-1">{MERCHANT_WALLET}</div><button onClick={() => handleCopy(MERCHANT_WALLET, 'merchant')} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-800">{copiedField === 'merchant' ? <CheckCircle size={14} className="text-green-500"/> : <Copy size={14}/>}</button></div></div>
+                                                <div><span className="text-xs text-slate-400 block mb-1">To (Merchant)</span><div className="flex items-center gap-2"><div className="font-mono text-xs bg-slate-100 p-2 rounded border text-slate-600 truncate flex-1">{selectedOrder.merchant_wallet}</div><button onClick={() => handleCopy(selectedOrder.merchant_wallet, 'merchant')} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-800">{copiedField === 'merchant' ? <CheckCircle size={14} className="text-green-500"/> : <Copy size={14}/>}</button></div></div>
                                                 {selectedOrder.tx_hash && (<div className="pt-2 border-t border-slate-100 mt-2"><span className="text-xs text-slate-400 block mb-1">Transaction Hash</span><div className="flex items-center gap-2"><div className="font-mono text-xs bg-blue-50 p-2 rounded border border-blue-100 text-blue-600 truncate flex-1">{selectedOrder.tx_hash}</div><button onClick={() => handleCopy(selectedOrder.tx_hash, 'tx')} className="p-2 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-800">{copiedField === 'tx' ? <CheckCircle size={14} className="text-green-500"/> : <Copy size={14}/>}</button><a href={`${BLOCK_EXPLORER}${selectedOrder.tx_hash}`} target="_blank" rel="noreferrer" className="p-2 hover:bg-blue-100 rounded text-blue-500 hover:text-blue-700"><ExternalLink size={16}/></a></div></div>)}
                                             </div>
                                         </div>
